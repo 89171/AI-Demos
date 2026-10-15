@@ -1,0 +1,294 @@
+{
+  "street.png": {
+    "type": "detection",
+    "objects": [
+      {
+        "label": "汽车",
+        "labelEn": "car",
+        "x": 0.09375,
+        "y": 0.66667,
+        "w": 0.23438,
+        "h": 0.14583
+      },
+      {
+        "label": "汽车",
+        "labelEn": "car",
+        "x": 0.67188,
+        "y": 0.65833,
+        "w": 0.25,
+        "h": 0.15417
+      },
+      {
+        "label": "交通灯",
+        "labelEn": "traffic light",
+        "x": 0.45625,
+        "y": 0.25,
+        "w": 0.05,
+        "h": 0.16667
+      },
+      {
+        "label": "行人",
+        "labelEn": "person",
+        "x": 0.39062,
+        "y": 0.41667,
+        "w": 0.05937,
+        "h": 0.24583
+      },
+      {
+        "label": "自行车",
+        "labelEn": "bicycle",
+        "x": 0.5875,
+        "y": 0.675,
+        "w": 0.16875,
+        "h": 0.10833
+      },
+      {
+        "label": "树",
+        "labelEn": "tree",
+        "x": 0.8,
+        "y": 0.3125,
+        "w": 0.10625,
+        "h": 0.14583
+      }
+    ],
+    "width": 640,
+    "height": 480
+  },
+  "desk.png": {
+    "type": "detection",
+    "objects": [
+      {
+        "label": "笔记本电脑",
+        "labelEn": "laptop",
+        "x": 0.20312,
+        "y": 0.27083,
+        "w": 0.5,
+        "h": 0.39167
+      },
+      {
+        "label": "键盘",
+        "labelEn": "keyboard",
+        "x": 0.28125,
+        "y": 0.6875,
+        "w": 0.34375,
+        "h": 0.0875
+      },
+      {
+        "label": "鼠标",
+        "labelEn": "mouse",
+        "x": 0.67188,
+        "y": 0.69583,
+        "w": 0.07187,
+        "h": 0.10833
+      },
+      {
+        "label": "杯子",
+        "labelEn": "cup",
+        "x": 0.09375,
+        "y": 0.625,
+        "w": 0.125,
+        "h": 0.16667
+      },
+      {
+        "label": "书本",
+        "labelEn": "book",
+        "x": 0.75,
+        "y": 0.625,
+        "w": 0.1875,
+        "h": 0.20833
+      }
+    ],
+    "width": 640,
+    "height": 480
+  },
+  "portrait.png": {
+    "type": "face",
+    "objects": [
+      {
+        "label": "人脸",
+        "labelEn": "face",
+        "x": 0.27083,
+        "y": 0.1875,
+        "w": 0.45833,
+        "h": 0.46875
+      }
+    ],
+    "width": 480,
+    "height": 640
+  },
+  "document.png": {
+    "type": "ocr",
+    "lines": [
+      {
+        "text": "INVOICE / 发票",
+        "x": 0.07742,
+        "y": 0.07625,
+        "w": 0.39032,
+        "h": 0.04125
+      },
+      {
+        "text": "发票号码 Invoice No.  INV-2026-1008",
+        "x": 0.07742,
+        "y": 0.17625,
+        "w": 0.59677,
+        "h": 0.02625
+      },
+      {
+        "text": "开票日期 Date        2026-10-08",
+        "x": 0.07742,
+        "y": 0.23125,
+        "w": 0.49032,
+        "h": 0.02625
+      },
+      {
+        "text": "客户名称 Customer    Acme Technologies Ltd.",
+        "x": 0.07742,
+        "y": 0.28625,
+        "w": 0.7629,
+        "h": 0.02625
+      },
+      {
+        "text": "地址 Address         上海市浦东新区世纪大道 100 号",
+        "x": 0.07742,
+        "y": 0.34,
+        "w": 0.80806,
+        "h": 0.0275
+      },
+      {
+        "text": "Item  Description              Qty   Price",
+        "x": 0.07742,
+        "y": 0.4575,
+        "w": 0.5629,
+        "h": 0.025
+      },
+      {
+        "text": "01    Cloud GPU Hours          120   3,600.00",
+        "x": 0.07742,
+        "y": 0.5075,
+        "w": 0.67903,
+        "h": 0.02375
+      },
+      {
+        "text": "02    Model Fine-tuning         4    1,280.00",
+        "x": 0.07742,
+        "y": 0.555,
+        "w": 0.6371,
+        "h": 0.025
+      },
+      {
+        "text": "03    Storage (TB/month)        12     720.00",
+        "x": 0.07742,
+        "y": 0.6025,
+        "w": 0.65484,
+        "h": 0.025
+      },
+      {
+        "text": "合计 Total (CNY)            5,600.00",
+        "x": 0.07742,
+        "y": 0.7075,
+        "w": 0.61774,
+        "h": 0.0325
+      },
+      {
+        "text": "Thank you for your business.",
+        "x": 0.07742,
+        "y": 0.8,
+        "w": 0.44839,
+        "h": 0.025
+      }
+    ],
+    "text": "INVOICE / 发票\n发票号码 Invoice No.  INV-2026-1008\n开票日期 Date        2026-10-08\n客户名称 Customer    Acme Technologies Ltd.\n地址 Address         上海市浦东新区世纪大道 100 号\nItem  Description              Qty   Price\n01    Cloud GPU Hours          120   3,600.00\n02    Model Fine-tuning         4    1,280.00\n03    Storage (TB/month)        12     720.00\n合计 Total (CNY)            5,600.00\nThank you for your business.",
+    "fields": {
+      "document_type": "invoice",
+      "invoice_no": "INV-2026-1008",
+      "date": "2026-10-08",
+      "customer": "Acme Technologies Ltd.",
+      "address": "上海市浦东新区世纪大道 100 号",
+      "currency": "CNY",
+      "total": "5,600.00",
+      "line_items": [
+        {
+          "item": "01",
+          "description": "Cloud GPU Hours",
+          "qty": "120",
+          "price": "3,600.00"
+        },
+        {
+          "item": "02",
+          "description": "Model Fine-tuning",
+          "qty": "4",
+          "price": "1,280.00"
+        },
+        {
+          "item": "03",
+          "description": "Storage (TB/month)",
+          "qty": "12",
+          "price": "720.00"
+        }
+      ]
+    },
+    "width": 620,
+    "height": 800
+  },
+  "poster.png": {
+    "type": "inpainting",
+    "masks": [
+      {
+        "x": 0.66,
+        "y": 0.83,
+        "w": 0.32,
+        "h": 0.14
+      }
+    ],
+    "width": 640,
+    "height": 480
+  },
+  "pose.png": {
+    "type": "pose",
+    "objects": [
+      {
+        "label": "人体",
+        "labelEn": "person",
+        "x": 0.05,
+        "y": 0.12222,
+        "w": 0.9,
+        "h": 0.81667
+      }
+    ],
+    "width": 480,
+    "height": 720
+  },
+  "hand.png": {
+    "type": "hand",
+    "objects": [
+      {
+        "label": "手部",
+        "labelEn": "hand",
+        "x": 0.125,
+        "y": 0.0625,
+        "w": 0.52083,
+        "h": 0.8375
+      }
+    ],
+    "width": 480,
+    "height": 480
+  },
+  "street-noisy.png": {
+    "type": "restoration",
+    "reference": "street.png",
+    "width": 640,
+    "height": 480
+  },
+  "street-lowres.png": {
+    "type": "restoration",
+    "reference": "street.png",
+    "width": 640,
+    "height": 480
+  },
+  "portrait-noisy.png": {
+    "type": "restoration",
+    "reference": "portrait.png",
+    "width": 480,
+    "height": 640
+  }
+}
