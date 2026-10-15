@@ -21,6 +21,16 @@ export const TAXONOMY: TaxonomyEntry[] = [
         name: { zh: '文本摘要', en: 'Summarization' },
         blurb: { zh: '长文压缩为要点与摘要', en: 'Compress long documents into key points' },
       },
+      {
+        slug: 'token-classification',
+        name: { zh: '命名实体识别', en: 'Named Entity Recognition' },
+        blurb: { zh: '抽取人名、地名、机构名', en: 'Extract people, places and organisations' },
+      },
+      {
+        slug: 'question-answering',
+        name: { zh: '抽取式问答', en: 'Question Answering' },
+        blurb: { zh: '从给定文本中定位答案', en: 'Locate the answer span inside a passage' },
+      },
     ],
   },
   {
@@ -97,6 +107,16 @@ export const TAXONOMY: TaxonomyEntry[] = [
         name: { zh: '图像增强修复', en: 'Image Restoration' },
         blurb: { zh: '超分、去噪与去模糊', en: 'Super-resolution, denoise and deblur' },
       },
+      {
+        slug: 'image-classification',
+        name: { zh: '图像分类', en: 'Image Classification' },
+        blurb: { zh: '为整张图片预测类别', en: 'Predict the class of a whole image' },
+      },
+      {
+        slug: 'zero-shot-detection',
+        name: { zh: '开放词表检测', en: 'Zero-shot Detection' },
+        blurb: { zh: '用文字描述任意目标并框选', en: 'Box any object you can describe in words' },
+      },
     ],
   },
   {
@@ -140,6 +160,11 @@ export const TAXONOMY: TaxonomyEntry[] = [
         slug: 'source-separation',
         name: { zh: '音源分离', en: 'Source Separation' },
         blurb: { zh: '拆分为人声与伴奏', en: 'Split into vocals and instrumental' },
+      },
+      {
+        slug: 'audio-classification',
+        name: { zh: '音频分类', en: 'Audio Classification' },
+        blurb: { zh: '识别声音事件与语音指令', en: 'Recognise sound events and spoken commands' },
       },
     ],
   },

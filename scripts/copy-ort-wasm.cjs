@@ -12,6 +12,13 @@ const root = path.resolve(__dirname, '..');
 const src = path.join(root, 'node_modules', 'onnxruntime-web', 'dist');
 const dest = path.join(root, 'public', 'ort');
 
+// MediaPipe Tasks WASM (face / pose / hand / object) goes to /public/mediapipe.
+const mpSrc = path.join(root, 'node_modules', '@mediapipe', 'tasks-vision', 'wasm');
+if (fs.existsSync(mpSrc)) {
+  fs.cpSync(mpSrc, path.join(root, 'public', 'mediapipe'), { recursive: true });
+  console.log('[copy-ort-wasm] MediaPipe wasm copied to public/mediapipe');
+}
+
 if (!fs.existsSync(src)) {
   console.log('[copy-ort-wasm] onnxruntime-web not installed, skipping');
   process.exit(0);

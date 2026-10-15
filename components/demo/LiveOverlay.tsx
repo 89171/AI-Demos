@@ -2,17 +2,18 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useApp } from '@/lib/client-context';
-import { buildLandmarks } from '@/lib/engine/image-tasks';
+import type { LandmarkSet } from '@/lib/engine/image-tasks';
+import { detectLandmarks, MP_VARIANT, MP_VARIANT_KINDS, type MpKind } from '@/lib/engine/mediapipe';
 
 /**
  * Live camera overlay for the real-time category.
  *
- * Runs entirely on the client: the camera frame is composited with the
- * landmark topology for the selected model so you can see the overlay behave
- * at interactive frame rates. It is a visual harness — the landmark positions
- * are driven by a tracking anchor, not by a loaded network.
+ * Runs entirely on the client: every camera frame goes through the selected
+ * MediaPipe model (VIDEO running mode) and the real landmarks are drawn on top.
  */
-export function LiveOverlay({ variant }: { variant: 'face' | 'pose' | 'hand' }) {
+export function LiveOverlay({ variant, mp }: { variant: 'face' | 'pose' | 'hand'; mp?: MpKind }) {
+  const kind = (mp && mp in MP_VARIANT_KINDS ? mp : MP_VARIANT[variant]) as keyof typeof MP_VARIANT_KINDS;
+  const setRef = useRef<LandmarkSet | null>(null);
   const { locale } = useApp();
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -25,6 +26,7 @@ export function LiveOverlay({ variant }: { variant: 'face' | 'pose' | 'hand' }) 
   useEffect(() => {
     if (!on) return;
     let frames = 0;
+    let busy = false;
     let last = performance.now();
     const loop = () => {
       const v = videoRef.current;
@@ -38,40 +40,34 @@ export function LiveOverlay({ variant }: { variant: 'face' | 'pose' | 'hand' }) 
         }
         const ctx = c.getContext('2d')!;
         ctx.drawImage(v, 0, 0, W, H);
+        if (!busy) {
+          busy = true;
+          detectLandmarks(kind, v, { mode: 'VIDEO', out: { w: W, h: H } })
+            .then((r) => (setRef.current = r.set))
+            .catch((e) => setError(String(e?.message ?? e)))
+            .finally(() => (busy = false));
+        }
 
-        const t = performance.now() / 1000;
-        const w = variant === 'pose' ? 0.4 : 0.34;
-        const h = variant === 'pose' ? 0.78 : 0.4;
-        const box = {
-          x: 0.5 - w / 2 + Math.sin(t * 0.6) * 0.045,
-          y: (variant === 'pose' ? 0.5 : 0.44) - h / 2 + Math.cos(t * 0.45) * 0.03,
-          w,
-          h,
-        };
-        const set = buildLandmarks(variant, box, `live-${variant}`);
-        const px = (x: number) => (x / 1) * 0; // placeholder to keep types explicit
-        void px;
+        const set = setRef.current;
         ctx.lineWidth = 1.6;
         ctx.strokeStyle = 'rgba(255,255,255,0.95)';
         ctx.fillStyle = 'rgba(255,255,255,0.95)';
         ctx.shadowColor = 'rgba(0,0,0,0.65)';
         ctx.shadowBlur = 3;
-        set.edges.forEach(([a, b]) => {
-          ctx.beginPath();
-          ctx.moveTo(set.points[a].x, set.points[a].y);
-          ctx.lineTo(set.points[b].x, set.points[b].y);
-          ctx.stroke();
-        });
-        set.mesh?.forEach((row) => {
-          ctx.beginPath();
-          row.forEach((pt, i) => (i ? ctx.lineTo(pt.x, pt.y) : ctx.moveTo(pt.x, pt.y)));
-          ctx.stroke();
-        });
-        set.points.forEach((pt) => {
-          ctx.beginPath();
-          ctx.arc(pt.x, pt.y, variant === 'face' ? 1.4 : 2.4, 0, Math.PI * 2);
-          ctx.fill();
-        });
+        if (set) {
+          if (kind === 'face-detect') ctx.strokeRect(set.box.x, set.box.y, set.box.w, set.box.h);
+          set.edges.forEach(([a, b]) => {
+            ctx.beginPath();
+            ctx.moveTo(set.points[a].x, set.points[a].y);
+            ctx.lineTo(set.points[b].x, set.points[b].y);
+            ctx.stroke();
+          });
+          set.points.forEach((pt) => {
+            ctx.beginPath();
+            ctx.arc(pt.x, pt.y, variant === 'face' ? 1.4 : 2.4, 0, Math.PI * 2);
+            ctx.fill();
+          });
+        }
         ctx.shadowBlur = 0;
 
         frames++;
@@ -85,7 +81,7 @@ export function LiveOverlay({ variant }: { variant: 'face' | 'pose' | 'hand' }) 
     };
     rafRef.current = requestAnimationFrame(loop);
     return () => cancelAnimationFrame(rafRef.current);
-  }, [on, variant]);
+  }, [on, variant, kind]);
 
   const start = async () => {
     try {
@@ -120,8 +116,8 @@ export function LiveOverlay({ variant }: { variant: 'face' | 'pose' | 'hand' }) 
           </div>
           <div className="mt-0.5 text-[10px]" style={{ color: 'var(--fg-faint)' }}>
             {locale === 'zh'
-              ? '摄像头画面 + 关键点拓扑，本地渲染，不上传任何数据'
-              : 'Camera frames plus landmark topology, rendered locally — nothing is uploaded'}
+              ? 'MediaPipe 模型逐帧推理，本地运行，不上传任何数据'
+              : 'MediaPipe runs on every frame locally — nothing is uploaded'}
           </div>
         </div>
         <div className="flex items-center gap-2">

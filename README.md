@@ -1,6 +1,6 @@
 # AI Demos
 
-浏览器端 AI 模型交互演示集。10 个分类、30 个子类、103 个模型，每个子类都有独立的演示页。
+浏览器端 AI 模型交互演示集。10 个分类、35 个子类、114 个模型，每个子类都有独立的演示页。
 
 ## 快速开始
 
@@ -38,7 +38,7 @@ npm run lint
 app/
   layout.tsx                                 根布局（侧边栏 + 主题 + 语言）
   page.tsx                                   首页：10 个分类总览
-  demos/[category]/[subcategory]/page.tsx    30 个子类演示页（静态预渲染）
+  demos/[category]/[subcategory]/page.tsx    35 个子类演示页（静态预渲染）
 components/
   AppShell.tsx                               侧边导航 / 主题切换 / 中英切换
   demo/
@@ -53,7 +53,7 @@ lib/
   client-context.tsx                         locale / theme 上下文
   data/
     taxonomy.ts                              分类与子类元数据
-    models.json                             从 WebAIModels 抽取的模型目录（103 个）
+    models.json                             从 WebAIModels 抽取的模型目录（103 个）；extra-models.json 补充上游没有的 11 个
     models.ts                                模型目录读取与展示标签
     registry.ts                              30 个子类的演示定义（输入类型、示例、参数）
     sample-gt.json                           示例图片的 ground truth 标注
@@ -72,7 +72,7 @@ public/samples/                              示例素材（图片、音频、�
 
 ## 三个核心约定
 
-1. **每个子类一个演示页** — `/demos/{分类}/{子类}`，共 30 个页面，构建时静态预渲染。
+1. **每个子类一个演示页** — `/demos/{分类}/{子类}`，共 35 个页面，构建时静态预渲染。
 2. **示例与模型解耦** — 同一子类下的示例（文本、图片、音频、视频）是通用的。切换模型只替换权重量化、设备与后端元信息，输入内容保持不变，并且会自动用新模型重跑一次。
 3. **可插拔推理层** — 所有任务都经过 `runInference(outputKind, ctx)`。要接入真实运行时（Transformers.js / onnxruntime-web / WebLLM / MediaPipe），只需在 `lib/engine/index.ts` 中为对应的 `outputKind` 换一个实现，UI 无需改动。
 
@@ -84,6 +84,8 @@ public/samples/                              示例素材（图片、音频、�
 | --- | --- |
 | 真实计算 | 结果由浏览器内真实算法得出 |
 | 演示模式 | 使用内置参考输出或规则引擎生成 |
+
+**真实权重**：音频降噪用 RNNoise（`@jitsi/rnnoise-wasm`）；音源分离用 HT-Demucs ONNX（Worker 中 onnxruntime-web，参考 json-toolkit 的实现）；图像修补用 MI-GAN ONNX；OCR 的 Tesseract.js 走 `tesseract.js`（WASM 与语言数据首次从 CDN 下载）；视频理解的 MediaPipe 分类器用 EfficientNet-Lite0 对抽样帧分类；实时感知（人脸 / 姿态 / 手势 / 目标追踪）走 `@mediapipe/tasks-vision`（模型来自 storage.googleapis.com/mediapipe-models，WASM 由 `postinstall` 复制到 `public/mediapipe`，摄像头叠加也逐帧真实推理）；其余带「浏览器权重」标记的模型走 Transformers.js，映射表见 `lib/data/real-models.ts`。
 
 以下任务在浏览器内**真实计算**：
 

@@ -479,6 +479,7 @@ export function DemoPlayground({ category, subcategory }: { category: string; su
       {spec.webcam && (
         <div className="mt-6">
           <LiveOverlay
+            mp={realSpecFor(category, subcategory, model.id)?.mp}
             variant={
               spec.outputKind === 'landmarks-pose'
                 ? 'pose'

@@ -60,6 +60,11 @@ import {
 } from './audio-tasks';
 import { clamp, mulberry32, round, seedFrom } from './random';
 import { REAL_SUBCATEGORIES, realSpecFor } from '../data/real-models';
+import { classifyImage, detectLandmarks, detectObjectsMp, makeTracker } from './mediapipe';
+import { tesseractOcr } from './tesseract';
+import { rnnoiseDenoise } from './rnnoise';
+import { miganInpaint } from './migan';
+import { separateReal } from './stems';
 import {
   askDocument,
   captionImage,
@@ -79,8 +84,7 @@ import {
   translateText,
   zeroShotClassifyImage,
   zeroShotClassifyText,
-  type LoadedRun,
-} from './real';
+  type LoadedRun, tagEntities, answerQuestion, classifyMedia, detectZeroShot } from './real';
 
 const GT = gtRaw as unknown as Record<string, GroundTruth>;
 
@@ -142,10 +146,10 @@ export type DemoPayload =
   | { kind: 'depth'; url: string }
   | { kind: 'restoration'; url: string; referenceUrl?: string; metrics: { label: string; value: string }[] }
   | { kind: 'generated-image'; url: string; seed: number; steps: number; guidance: number; palette: string }
-  | { kind: 'inpainting'; url: string; originalUrl: string; filled: number }
+  | { kind: 'inpainting'; url: string; originalUrl: string; filled: number; method?: string }
   | { kind: 'transcript'; language: string; text: string; segments: { start: number; end: number; text: string }[]; confidence: number }
   | { kind: 'synth-audio'; text: string; waveform: number[]; url?: string; voice?: string }
-  | { kind: 'audio-compare'; before: number[]; after: number[]; url: string; snrGainDb: number }
+  | { kind: 'audio-compare'; before: number[]; after: number[]; url: string; snrGainDb: number; method?: string }
   | { kind: 'stems'; stems: Stem[] }
   | { kind: 'music'; url: string; peaks: number[]; plan: { kind: string; tempo: number; duration: number; chords: number[][]; waveform: string } }
   | { kind: 'landmarks'; variant: 'face' | 'pose' | 'hand'; set: LandmarkSet; imageUrl: string; width: number; height: number; gesture?: string }
@@ -825,8 +829,11 @@ export async function runInference(
 
   if (real) {
     payload = real.payload;
-    deviceLabel = real.run.device === 'webgpu' ? 'Transformers.js · WebGPU' : 'Transformers.js · WASM (SIMD)';
-    backendLabel = real.run.device === 'webgpu' ? 'WebGPU' : 'WASM (SIMD)';
+    const task = realSpecFor(ctx.spec.category, ctx.spec.subcategory, model.id)?.task;
+    const mp = task === 'mediapipe';
+    const label = task === 'tesseract' ? 'Tesseract.js · WASM' : task === 'rnnoise' ? 'RNNoise · WASM' : task === 'onnxruntime' ? 'onnxruntime-web · WASM' : null;
+    deviceLabel = label ?? (mp ? 'MediaPipe Tasks · WASM (XNNPACK)' : real.run.device === 'webgpu' ? 'Transformers.js · WebGPU' : 'Transformers.js · WASM (SIMD)');
+    backendLabel = mp ? 'WASM (XNNPACK)' : real.run.device === 'webgpu' ? 'WebGPU' : 'WASM (SIMD)';
   } else {
     // No browser-ready weights for this entry: keep the deterministic simulator,
     // and let the progress UI show a read-out while it computes.
@@ -1145,6 +1152,13 @@ async function tryReal(ctx: RunContext): Promise<{ payload: DemoPayload; run: Lo
   try {
     switch (ctx.spec.outputKind) {
       case 'labels': {
+        if (spec.task === 'image-classification' || spec.task === 'audio-classification') {
+          if (!ctx.media?.src) return null;
+          ctx.onPhase?.(ctx.locale === 'zh' ? '准备权重…' : 'Preparing weights…');
+          const r = await classifyMedia(ctx.media.src, num(ctx.params.topK, 5), { spec, onProgress: report });
+          ctx.onPhase?.(ctx.locale === 'zh' ? '推理…' : 'Running inference…');
+          return { payload: { kind: 'labels', labels: r.labels }, run: r.meta };
+        }
         // Two very different pipelines land here: CLIP-style image labelling and
         // (zero-shot) text classification.
         if (spec.task === 'zero-shot-image-classification') {
@@ -1234,6 +1248,14 @@ async function tryReal(ctx: RunContext): Promise<{ payload: DemoPayload; run: Lo
       }
       case 'detection': {
         if (!ctx.media?.src) return null;
+        if (spec.task === 'zero-shot-object-detection') {
+          const queries = splitList(ctx.fields.labels);
+          if (!queries.length) return null;
+          ctx.onPhase?.(ctx.locale === 'zh' ? '准备权重…' : 'Preparing weights…');
+          const r = await detectZeroShot(ctx.media.src, queries, num(ctx.params.conf, 0.1), { spec, onProgress: report });
+          ctx.onPhase?.(ctx.locale === 'zh' ? '比对文字与候选框…' : 'Matching text to boxes…');
+          return { payload: { kind: 'detection', boxes: r.boxes, width: r.width, height: r.height, imageUrl: ctx.media.src }, run: r.meta };
+        }
         ctx.onPhase?.(ctx.locale === 'zh' ? '准备权重…' : 'Preparing weights…');
         const r = await detectObjects(ctx.media.src, ctx.locale, {
           spec,
@@ -1306,6 +1328,12 @@ async function tryReal(ctx: RunContext): Promise<{ payload: DemoPayload; run: Lo
       }
       case 'synth-audio': {
         if (!ctx.text.trim()) return null;
+        // Every browser-ready TTS checkpoint here is English-only; Chinese text produces an empty token
+        // sequence and an opaque OrtRun failure, so skip the weights instead of failing inside ORT.
+        if (!/[A-Za-z]/.test(ctx.text)) {
+          ctx.onPhase?.(ctx.locale === 'zh' ? '该真实模型仅支持英文文本，回退演示模式（切换到 English 可真实合成）…' : 'This real model is English-only; falling back to demo mode…');
+          return null;
+        }
         ctx.onPhase?.(ctx.locale === 'zh' ? '准备权重…' : 'Preparing weights…');
         const r = await synthesiseSpeech(ctx.text, { spec, onProgress: report });
         ctx.onPhase?.(ctx.locale === 'zh' ? '合成语音…' : 'Synthesising speech…');
@@ -1322,6 +1350,24 @@ async function tryReal(ctx: RunContext): Promise<{ payload: DemoPayload; run: Lo
       }
       case 'ocr': {
         if (!ctx.media?.src) return null;
+        if (spec.task === 'tesseract') {
+          ctx.onPhase?.(ctx.locale === 'zh' ? '加载 Tesseract 引擎与语言数据…' : 'Loading Tesseract engine and language data…');
+          const [r, size] = await Promise.all([tesseractOcr(ctx.media.src, str(ctx.params.lang, 'chi_sim+eng')), mediaNaturalSize(ctx.media.src)]);
+          const lines = r.lines
+            .filter((l) => l.text.trim())
+            .map((l) => ({
+              text: l.text.trim(),
+              x: l.bbox.x0 / size.width,
+              y: l.bbox.y0 / size.height,
+              w: (l.bbox.x1 - l.bbox.x0) / size.width,
+              h: (l.bbox.y1 - l.bbox.y0) / size.height,
+              conf: round(l.confidence / 100, 3),
+            }));
+          return {
+            payload: { kind: 'ocr', lines, text: r.text, width: size.width, height: size.height, imageUrl: ctx.media.src },
+            run: { call: async () => null, repo: spec.repo, dtype: spec.dtype, device: 'wasm', bytes: 0 },
+          };
+        }
         ctx.onPhase?.(ctx.locale === 'zh' ? '准备权重…' : 'Preparing weights…');
         const isDoc = spec.task === 'document-question-answering';
         const r = isDoc
@@ -1406,6 +1452,17 @@ async function tryReal(ctx: RunContext): Promise<{ payload: DemoPayload; run: Lo
           ctx.onPhase?.(ctx.locale === 'zh' ? '逐句解码…' : 'Decoding…');
           return { payload: { kind: 'text', text: r.text }, run: r.meta };
         }
+        if (spec.task === 'question-answering') {
+          const question = (ctx.fields.question ?? '').trim();
+          if (!question) return null;
+          ctx.onPhase?.(ctx.locale === 'zh' ? '准备权重…' : 'Preparing weights…');
+          const r = await answerQuestion(question, ctx.text, { spec, onProgress: report });
+          ctx.onPhase?.(ctx.locale === 'zh' ? '定位答案…' : 'Locating the answer…');
+          return {
+            payload: { kind: 'text', text: r.answer || (ctx.locale === 'zh' ? '（原文中没有找到答案）' : '(no answer found in the passage)'), extra: { points: [`score ${r.score}`] } },
+            run: r.meta,
+          };
+        }
         if (spec.task !== 'summarization') return null;
         ctx.onPhase?.(ctx.locale === 'zh' ? '准备权重…' : 'Preparing weights…');
         const r = await summariseText(ctx.text, { spec, onProgress: report });
@@ -1416,6 +1473,15 @@ async function tryReal(ctx: RunContext): Promise<{ payload: DemoPayload; run: Lo
         };
       }
       case 'json': {
+        if (spec.task === 'token-classification') {
+          if (!ctx.text.trim()) return null;
+          ctx.onPhase?.(ctx.locale === 'zh' ? '准备权重…' : 'Preparing weights…');
+          const r = await tagEntities(ctx.text, { spec, onProgress: report });
+          ctx.onPhase?.(ctx.locale === 'zh' ? '合并实体…' : 'Merging entities…');
+          const min = num(ctx.params.minScore, 0.6);
+          const entities = r.entities.filter((e) => e.score >= min);
+          return { payload: { kind: 'json', value: { entities }, raw: JSON.stringify({ entities }, null, 2) }, run: r.meta };
+        }
         if (spec.task !== 'text-generation' || !ctx.text.trim()) return null;
         ctx.onPhase?.(ctx.locale === 'zh' ? '准备权重…' : 'Preparing weights…');
         const r = await generateText(structuredPromptFor(ctx), { spec, onProgress: report }, {
@@ -1439,6 +1505,107 @@ async function tryReal(ctx: RunContext): Promise<{ payload: DemoPayload; run: Lo
             language: str(ctx.params.language, 'typescript'),
           },
           run: r.meta,
+        };
+      }
+      case 'audio-compare': {
+        if (!ctx.media?.src || spec.task !== 'rnnoise') return null;
+        ctx.onPhase?.(ctx.locale === 'zh' ? 'RNNoise 逐帧降噪…' : 'RNNoise denoising frame by frame…');
+        const r = await rnnoiseDenoise(ctx.media.src, 1 - num(ctx.params.strength, 0.8));
+        return { payload: { kind: 'audio-compare', ...r, method: 'RNNoise (GRU)' }, run: { call: async () => null, repo: spec.repo, dtype: spec.dtype, device: 'wasm', bytes: 0 } };
+      }
+      case 'stems': {
+        if (!ctx.media?.src || spec.ort !== 'demucs' || !spec.stems) return null;
+        const label = { model: ['下载权重', 'Downloading weights'], session: ['建立推理会话（约半分钟）', 'Creating session (~30 s)'], separating: ['分离中', 'Separating'] } as const;
+        const stems = await separateReal(ctx.media.src, spec.repo, spec.stems, Number(str(ctx.params.model, '2')) === 4 ? 4 : 2, (phase, r) =>
+          ctx.onPhase?.(`${label[phase][ctx.locale === 'zh' ? 0 : 1]} ${phase === 'session' ? '' : `${Math.round(r * 100)}%`}`)
+        );
+        return { payload: { kind: 'stems', stems }, run: { call: async () => null, repo: spec.repo, dtype: spec.dtype, device: 'wasm', bytes: 0 } };
+      }
+      case 'inpainting': {
+        if (!ctx.media?.src || spec.ort !== 'migan') return null;
+        const img = await loadImage(ctx.media.src);
+        const canvas = toCanvas(img, 720);
+        const size = canvas.width * canvas.height;
+        let alpha = ctx.maskAlpha && ctx.maskAlpha.length === size ? ctx.maskAlpha : new Float32Array(size);
+        if (!alpha.some((v) => v > 0.35)) {
+          const truth = truthFor(ctx.media);
+          if (truth?.masks?.length) alpha = maskFromRects(canvas.width, canvas.height, truth.masks);
+        }
+        const res = await miganInpaint(canvas, alpha, spec.repo, (r) =>
+          ctx.onPhase?.(ctx.locale === 'zh' ? `下载权重 ${Math.round(r * 100)}%` : `Downloading weights ${Math.round(r * 100)}%`)
+        );
+        ctx.onPhase?.(ctx.locale === 'zh' ? 'MI-GAN 补全…' : 'MI-GAN filling…');
+        return {
+          payload: { kind: 'inpainting', url: res.url, originalUrl: canvas.toDataURL('image/png'), filled: res.filled, method: 'MI-GAN' },
+          run: { call: async () => null, repo: spec.repo, dtype: spec.dtype, device: 'wasm', bytes: 0 },
+        };
+      }
+      case 'landmarks-face':
+      case 'landmarks-pose':
+      case 'landmarks-hand': {
+        if (!ctx.media?.src || !spec.mp || spec.mp === 'object' || spec.mp === 'classify') return null;
+        ctx.onPhase?.(ctx.locale === 'zh' ? '加载 MediaPipe 模型…' : 'Loading MediaPipe model…');
+        const img = await loadImage(ctx.media.src);
+        const { set, gesture } = await detectLandmarks(spec.mp, img);
+        const variant = ctx.spec.outputKind.slice(10) as 'face' | 'pose' | 'hand';
+        return {
+          payload: { kind: 'landmarks', variant, set, imageUrl: ctx.media.src, width: img.naturalWidth, height: img.naturalHeight, gesture },
+          run: { call: async () => null, repo: spec.repo, dtype: spec.dtype, device: 'wasm', bytes: 0 },
+        };
+      }
+      case 'video-timeline': {
+        if (!ctx.media?.src || spec.mp !== 'classify') return null;
+        ctx.onPhase?.(ctx.locale === 'zh' ? '加载 MediaPipe 模型…' : 'Loading MediaPipe model…');
+        const video = await loadVideo(ctx.media.src);
+        const duration = Number.isFinite(video.duration) && video.duration > 0 ? video.duration : 6;
+        const n = Math.min(24, Math.max(2, Math.round(duration * num(ctx.params.fps, 4) / 2)));
+        const segs: { start: number; end: number; label: string; scores: number[] }[] = [];
+        for (let i = 0; i < n; i++) {
+          const a = (duration * i) / n;
+          await seek(video, a + duration / n / 2);
+          ctx.onPhase?.(ctx.locale === 'zh' ? `分类帧 ${i + 1}/${n}` : `Classifying frame ${i + 1}/${n}`);
+          const c = await classifyImage(video);
+          const last = segs[segs.length - 1];
+          if (last?.label === c.label) {
+            last.end = a + duration / n;
+            last.scores.push(c.score);
+          } else segs.push({ start: a, end: a + duration / n, label: c.label, scores: [c.score] });
+        }
+        const segments = segs
+          .slice(0, num(ctx.params.maxSegments, 6))
+          .map((g) => ({ start: round(g.start, 2), end: round(g.end, 2), label: g.label, confidence: round(g.scores.reduce((x, y) => x + y, 0) / g.scores.length, 2) }));
+        const top = [...segments].sort((a, b) => b.end - b.start - (a.end - a.start))[0];
+        return {
+          payload: {
+            kind: 'video-timeline',
+            duration,
+            segments,
+            summary: ctx.locale === 'zh' ? `共 ${segments.length} 个时间段；占比最长的是「${top?.label}」。` : `${segments.length} segments; the longest is “${top?.label}”.`,
+            thumbs: await frameThumbnails(video, 6),
+            videoUrl: ctx.media.src,
+          },
+          run: { call: async () => null, repo: spec.repo, dtype: spec.dtype, device: 'wasm', bytes: 0 },
+        };
+      }
+      case 'tracking': {
+        if (!ctx.media?.src || spec.mp !== 'object') return null;
+        ctx.onPhase?.(ctx.locale === 'zh' ? '加载 MediaPipe 模型…' : 'Loading MediaPipe model…');
+        const video = await loadVideo(ctx.media.src);
+        const duration = Number.isFinite(video.duration) && video.duration > 0 ? video.duration : 6;
+        const total = Math.min(24, Math.max(2, Math.round(duration * 3)));
+        const track = makeTracker(Math.round(num(ctx.params.maxAge, 30) / 10));
+        const conf = num(ctx.params.conf, 0.3);
+        const frames = [];
+        for (let f = 0; f < total; f++) {
+          const t = (duration * (f + 0.5)) / total;
+          await seek(video, t);
+          ctx.onPhase?.(ctx.locale === 'zh' ? `检测并关联 ${f + 1}/${total}` : `Detecting and associating ${f + 1}/${total}`);
+          frames.push({ t: round(t, 2), boxes: track(await detectObjectsMp(video, conf)) });
+        }
+        const trackCount = new Set(frames.flatMap((f) => f.boxes.map((b) => b.id))).size;
+        return {
+          payload: { kind: 'tracking', duration, frames, trackCount, videoUrl: ctx.media.src },
+          run: { call: async () => null, repo: spec.repo, dtype: spec.dtype, device: 'wasm', bytes: 0 },
         };
       }
       default:

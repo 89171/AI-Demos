@@ -1,0 +1,138 @@
+{
+  "text": {
+    "token-classification": [
+      {
+        "id": "bert-base-ner",
+        "name": "BERT-base NER",
+        "framework": "transformersjs",
+        "size": "~109 MB",
+        "license": "mit",
+        "languages": [
+          "English"
+        ],
+        "description": "BERT fine-tuned on CoNLL-2003 for person / organisation / location / misc entities.",
+        "docsUrl": "https://huggingface.co/docs/transformers.js"
+      },
+      {
+        "id": "distilbert-multilingual-ner",
+        "name": "DistilBERT Multilingual NER",
+        "framework": "transformersjs",
+        "size": "~135 MB",
+        "license": "apache-2-0",
+        "languages": [
+          "10 languages"
+        ],
+        "description": "Distilled multilingual BERT fine-tuned for entity recognition in 10 high-resource languages including Chinese.",
+        "docsUrl": "https://huggingface.co/docs/transformers.js"
+      }
+    ],
+    "question-answering": [
+      {
+        "id": "distilbert-squad",
+        "name": "DistilBERT (SQuAD)",
+        "framework": "transformersjs",
+        "size": "~67 MB",
+        "license": "apache-2-0",
+        "languages": [
+          "English"
+        ],
+        "description": "DistilBERT fine-tuned on SQuAD v1.1 for extractive question answering.",
+        "docsUrl": "https://huggingface.co/docs/transformers.js"
+      },
+      {
+        "id": "distilbert-squad-uncased",
+        "name": "DistilBERT uncased (SQuAD)",
+        "framework": "transformersjs",
+        "size": "~67 MB",
+        "license": "apache-2-0",
+        "languages": [
+          "English"
+        ],
+        "description": "Uncased DistilBERT distilled on SQuAD v1.1.",
+        "docsUrl": "https://huggingface.co/docs/transformers.js"
+      }
+    ]
+  },
+  "vision": {
+    "image-classification": [
+      {
+        "id": "mobilevit-small",
+        "name": "MobileViT Small",
+        "framework": "transformersjs",
+        "size": "~6 MB",
+        "license": "other",
+        "languages": [
+          "ImageNet-1k"
+        ],
+        "description": "Light-weight vision transformer for ImageNet-1k classification.",
+        "docsUrl": "https://huggingface.co/docs/transformers.js"
+      },
+      {
+        "id": "resnet-50",
+        "name": "ResNet-50",
+        "framework": "transformersjs",
+        "size": "~26 MB",
+        "license": "apache-2-0",
+        "languages": [
+          "ImageNet-1k"
+        ],
+        "description": "Classic residual network trained on ImageNet-1k.",
+        "docsUrl": "https://huggingface.co/docs/transformers.js"
+      },
+      {
+        "id": "vit-base",
+        "name": "ViT Base (patch16-224)",
+        "framework": "transformersjs",
+        "size": "~88 MB",
+        "license": "apache-2-0",
+        "languages": [
+          "ImageNet-1k"
+        ],
+        "description": "Vision Transformer base model trained on ImageNet-21k and fine-tuned on ImageNet-1k.",
+        "docsUrl": "https://huggingface.co/docs/transformers.js"
+      }
+    ],
+    "zero-shot-detection": [
+      {
+        "id": "owlvit-base",
+        "name": "OWL-ViT Base",
+        "framework": "transformersjs",
+        "size": "~155 MB",
+        "license": "apache-2-0",
+        "languages": [
+          "Open vocabulary"
+        ],
+        "description": "Open-vocabulary detector: find objects described by free-text queries.",
+        "docsUrl": "https://huggingface.co/docs/transformers.js"
+      }
+    ]
+  },
+  "audio": {
+    "audio-classification": [
+      {
+        "id": "ast-audioset",
+        "name": "Audio Spectrogram Transformer",
+        "framework": "transformersjs",
+        "size": "~91 MB",
+        "license": "bsd-3",
+        "languages": [
+          "AudioSet-527"
+        ],
+        "description": "Spectrogram transformer fine-tuned on AudioSet for 527 sound-event classes.",
+        "docsUrl": "https://huggingface.co/docs/transformers.js"
+      },
+      {
+        "id": "wav2vec2-keyword-spotting",
+        "name": "Wav2Vec2 Keyword Spotting",
+        "framework": "transformersjs",
+        "size": "~96 MB",
+        "license": "apache-2-0",
+        "languages": [
+          "Speech Commands"
+        ],
+        "description": "Wav2Vec2 fine-tuned on Speech Commands to spot 12 spoken keywords.",
+        "docsUrl": "https://huggingface.co/docs/transformers.js"
+      }
+    ]
+  }
+}

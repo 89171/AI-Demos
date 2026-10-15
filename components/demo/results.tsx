@@ -178,8 +178,8 @@ export function ResultView({ result, running, phase }: { result: RunResult | nul
       {result.meta.real?.substitute ? (
         <p className="text-[11px] leading-5" style={{ color: 'var(--fg-faint)' }}>
           {locale === 'zh'
-            ? '* 原模型没有浏览器可直接推理的权重，这里加载的是同类任务的实际 ONNX 检查点。'
-            : '* The original checkpoint has no browser build; a real ONNX model for the same task is loaded instead.'}
+            ? '* 原模型没有浏览器可直接推理的权重，这里加载的是同类任务的实际检查点（ONNX / TFLite）。'
+            : '* The original checkpoint has no browser build; a real ONNX or TFLite model for the same task is loaded instead.'}
         </p>
       ) : null}
       <Body payload={result.payload} />
@@ -823,7 +823,7 @@ function InpaintingView({ p }: { p: Extract<DemoPayload, { kind: 'inpainting' }>
       </div>
       <div className="grid grid-cols-2 gap-2">
         <Stat label={tr('filled')} value={p.filled ? `${p.filled.toLocaleString()} px` : '0'} />
-        <Stat label={locale === 'zh' ? '算法' : 'Algorithm'} value="diffusion fill" />
+        <Stat label={locale === 'zh' ? '算法' : 'Algorithm'} value={p.method ?? 'diffusion fill'} />
       </div>
       <a className="btn w-full" href={p.url} download="inpainted.png">
         ↓ {locale === 'zh' ? '下载结果图' : 'Download result'}
@@ -960,7 +960,7 @@ function AudioCompareView({ p }: { p: Extract<DemoPayload, { kind: 'audio-compar
       </div>
       <div className="grid grid-cols-2 gap-2">
         <Stat label={locale === 'zh' ? '信噪比提升' : 'SNR gain'} value={`${p.snrGainDb.toFixed(1)} dB`} />
-        <Stat label={locale === 'zh' ? '处理方式' : 'Method'} value="STFT spectral gate" />
+        <Stat label={locale === 'zh' ? '处理方式' : 'Method'} value={p.method ?? 'STFT spectral gate'} />
       </div>
     </div>
   );
@@ -1027,7 +1027,7 @@ function LandmarksView({ p }: { p: Extract<DemoPayload, { kind: 'landmarks' }> }
       <div className="relative overflow-hidden rounded-lg border" style={{ background: 'var(--bg-inset)' }}>
         <BoxOverlay
           imgSrc={p.imageUrl}
-          boxes={[{ label: 'target', labelEn: variant, score: 0.94, x: set.box.x, y: set.box.y, w: set.box.w, h: set.box.h }]}
+          boxes={set.points.length ? [{ label: 'target', labelEn: variant, score: 0.94, x: set.box.x, y: set.box.y, w: set.box.w, h: set.box.h }] : []}
           hover={null}
           onHover={() => undefined}
           landmarks={
@@ -1079,8 +1079,8 @@ function LandmarksView({ p }: { p: Extract<DemoPayload, { kind: 'landmarks' }> }
       </div>
       <p className="text-[10px] leading-4" style={{ color: 'var(--fg-faint)' }}>
         {locale === 'zh'
-          ? '关键点拓扑来自模型规范，位置由输入图像的目标框推导；上传自定义图片时使用肤色/轮廓分析定位。'
-          : 'Landmark topology comes from the model spec and positions are derived from the detected target box; uploads use skin-tone and silhouette analysis.'}
+          ? '真实权重：关键点由 MediaPipe 模型对该图像直接推理得出；标记为演示模式时则由目标框推导。'
+          : 'Real-weights runs: landmarks come straight from the MediaPipe model. In demo mode they are derived from a target box.'}
       </p>
     </div>
   );

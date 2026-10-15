@@ -8,13 +8,13 @@
 
 /* ------------------------------------------------------------------- codecs */
 
-export async function decodeAudio(src: string): Promise<AudioBuffer> {
+export async function decodeAudio(src: string, sampleRate = 16000): Promise<AudioBuffer> {
   const res = await fetch(src);
   const buf = await res.arrayBuffer();
   const AC: typeof AudioContext =
     (window as unknown as { AudioContext: typeof AudioContext }).AudioContext ||
     (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
-  const ctx = new AC({ sampleRate: 16000 });
+  const ctx = new AC({ sampleRate });
   try {
     return await ctx.decodeAudioData(buf.slice(0));
   } finally {
@@ -242,7 +242,7 @@ export function denoise(buffer: AudioBuffer, strength: number, hpf: boolean): De
 }
 
 /** Frame-wise peak envelope for a raw sample buffer. */
-function framePeaks(ch: Float32Array, buckets: number): number[] {
+export function framePeaks(ch: Float32Array, buckets: number): number[] {
   const size = Math.max(1, Math.floor(ch.length / buckets));
   const out: number[] = [];
   for (let b = 0; b < buckets; b++) {
@@ -260,7 +260,7 @@ function framePeaks(ch: Float32Array, buckets: number): number[] {
  * Estimate the SNR improvement: compare the noise floor (10th percentile of
  * short-window energy) against the speech level (90th percentile).
  */
-function estimateSnrGain(before: Float32Array, after: Float32Array, sampleRate: number): number {
+export function estimateSnrGain(before: Float32Array, after: Float32Array, sampleRate: number): number {
   const win = Math.max(64, Math.floor(sampleRate * 0.02));
   const frames = (buf: Float32Array) => {
     const out: number[] = [];

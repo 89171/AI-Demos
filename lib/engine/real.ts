@@ -22,7 +22,7 @@ export interface ProgressInfo {
 
 export interface LoadedRun {
   /** Execute this pipeline. Options vary per task (object, label array, string). */
-  call: (input: unknown, options?: unknown) => Promise<unknown>;
+  call: (input: unknown, ...args: unknown[]) => Promise<unknown>;
   repo: string;
   dtype: string;
   device: string;
@@ -30,7 +30,7 @@ export interface LoadedRun {
   bytes: number;
 }
 
-type Pipe = (input: unknown, options?: any) => Promise<unknown>;
+type Pipe = (input: unknown, ...args: any[]) => Promise<unknown>;
 
 type Runtime = any;
 
@@ -87,27 +87,28 @@ async function loadPipeline({ spec, onProgress, forceDevice }: LoadOptions): Pro
     let loaded = 0;
     let total = 0;
     let lastFile: string | undefined;
-    const pipe: Pipe = await mod.pipeline(spec.task, spec.repo, {
+    const progress_callback = (e: {
+      status?: string;
+      file?: string;
+      name?: string;
+      loaded?: number;
+      total?: number;
+      progress?: number;
+    }) => {
+      if (e.file && e.file !== lastFile) lastFile = e.file;
+      if (e.status === 'progress' && typeof e.loaded === 'number' && typeof e.total === 'number') {
+        loaded = Math.max(loaded, e.loaded);
+        total = Math.max(total, e.total);
+        onProgress?.({ loaded, total, file: lastFile, ratio: total ? loaded / total : 0 });
+      }
+    };
+    const pipe: Pipe = spec.repo === 'briaai/RMBG-1.4' ? await loadRmbg(mod, spec, device, progress_callback) : await mod.pipeline(spec.task, spec.repo, {
       dtype: spec.dtype,
       device,
-      progress_callback: (e: {
-        status?: string;
-        file?: string;
-        name?: string;
-        loaded?: number;
-        total?: number;
-        progress?: number;
-      }) => {
-        if (e.file && e.file !== lastFile) lastFile = e.file;
-        if (e.status === 'progress' && typeof e.loaded === 'number' && typeof e.total === 'number') {
-          loaded = Math.max(loaded, e.loaded);
-          total = Math.max(total, e.total);
-          onProgress?.({ loaded, total, file: lastFile, ratio: total ? loaded / total : 0 });
-        }
-      },
+      progress_callback,
     } as any);
     return {
-      call: (input: unknown, options?: unknown) => pipe(input, options ?? {}) as Promise<unknown>,
+      call: (input: unknown, ...args: unknown[]) => pipe(input, ...(args.length ? args : [{}])) as Promise<unknown>,
       repo: spec.repo,
       dtype: spec.dtype,
       device,
@@ -122,6 +123,38 @@ async function loadPipeline({ spec, onProgress, forceDevice }: LoadOptions): Pro
     pipelineCache.delete(key);
     throw err;
   }
+}
+
+/**
+ * RMBG-1.4 ships a custom `BriaRMBG` architecture that the generic background-removal pipeline
+ * cannot resolve (it falls through to SegformerForSemanticSegmentation), so load it as a raw model
+ * with the preprocessing from its model card and rebuild the RGBA cut-out ourselves.
+ */
+async function loadRmbg(mod: Runtime, spec: RealModelSpec, device: string, progress_callback: (e: never) => void): Promise<Pipe> {
+  const model = await mod.AutoModel.from_pretrained(spec.repo, { config: { model_type: 'custom' }, dtype: spec.dtype, device, progress_callback });
+  const processor = await mod.AutoProcessor.from_pretrained(spec.repo, {
+    config: {
+      do_normalize: true,
+      do_pad: false,
+      do_rescale: true,
+      do_resize: true,
+      image_mean: [0.5, 0.5, 0.5],
+      feature_extractor_type: 'ImageFeatureExtractor',
+      image_std: [1, 1, 1],
+      resample: 2,
+      rescale_factor: 1 / 255,
+      size: { width: 1024, height: 1024 },
+    },
+  });
+  return async (src: unknown) => {
+    const image = await mod.RawImage.read(src as string);
+    const { pixel_values } = await processor(image);
+    const { output } = await model({ input: pixel_values });
+    const mask = await mod.RawImage.fromTensor(output[0].mul(255).to('uint8')).resize(image.width, image.height);
+    const cut = image.clone();
+    cut.putAlpha(mask);
+    return cut;
+  };
 }
 
 /** Load a real pipeline, falling back to WASM when WebGPU is unavailable or broken. */
@@ -330,7 +363,13 @@ export async function synthesiseSpeech(
   opts: LoadOptions
 ): Promise<{ waveform: Float32Array; sampleRate: number; meta: LoadedRun }> {
   const run = await getRun(opts);
-  const out = (await run.call(text)) as { audio?: Float32Array | number[]; sampling_rate?: number };
+  // Both TTS families are conditioned on a speaker vector: the stock CMU-Arctic x-vector for SpeechT5, voice F1 for Supertonic.
+  const options = opts.spec.repo.includes('speecht5')
+    ? { speaker_embeddings: 'https://huggingface.co/datasets/Xenova/transformers.js-docs/resolve/main/speaker_embeddings.bin' }
+    : opts.spec.repo.includes('Supertonic')
+      ? { speaker_embeddings: 'https://huggingface.co/onnx-community/Supertonic-TTS-ONNX/resolve/main/voices/F1.bin' }
+      : undefined;
+  const out = (await run.call(text, options)) as { audio?: Float32Array | number[]; sampling_rate?: number };
   const raw = out.audio;
   const waveform = raw instanceof Float32Array ? raw : new Float32Array(Array.from(raw ?? []));
   return { waveform, sampleRate: out.sampling_rate ?? 16000, meta: run };
@@ -692,4 +731,97 @@ export async function semanticSegment(
     coverage: Math.round(largest * 1000) / 1000,
     meta: run,
   };
+}
+
+/* ------------------------------------------------- token / span / class tasks */
+
+const CJK = /[\u3400-\u9fff]/;
+
+export interface Entity {
+  text: string;
+  type: string;
+  score: number;
+}
+
+/** BIO token tags → whole entities (sub-word pieces and adjacent I- tags merge). */
+export async function tagEntities(
+  text: string,
+  opts: LoadOptions
+): Promise<{ entities: Entity[]; meta: LoadedRun }> {
+  const run = await getRun(opts);
+  const raw = (await run.call(text, { ignore_labels: ['O'] })) as {
+    entity: string;
+    score: number;
+    word: string;
+    index: number;
+  }[];
+  const out: (Entity & { last: number; n: number })[] = [];
+  for (const t of raw) {
+    const type = t.entity.replace(/^[BI]-/, '');
+    const sub = t.word.startsWith('##');
+    const word = t.word.replace(/^##/, '');
+    const prev = out[out.length - 1];
+    const joins = prev && t.index === prev.last + 1 && (sub || (t.entity.startsWith('I-') && prev.type === type));
+    if (joins) {
+      const glue = sub || CJK.test(word) || CJK.test(prev.text.slice(-1)) ? '' : ' ';
+      prev.text += glue + word;
+      prev.score += t.score;
+      prev.n++;
+      prev.last = t.index;
+    } else {
+      out.push({ text: word, type, score: t.score, last: t.index, n: 1 });
+    }
+  }
+  return {
+    entities: out.map((e) => ({ text: e.text, type: e.type, score: Math.round((e.score / e.n) * 1000) / 1000 })),
+    meta: run,
+  };
+}
+
+export async function answerQuestion(
+  question: string,
+  context: string,
+  opts: LoadOptions
+): Promise<{ answer: string; score: number; meta: LoadedRun }> {
+  const run = await getRun(opts);
+  const out = (await run.call(question, context)) as { answer?: string; score?: number } | { answer?: string; score?: number }[];
+  const best = Array.isArray(out) ? out[0] : out;
+  return { answer: (best?.answer ?? '').trim(), score: Math.round((best?.score ?? 0) * 1000) / 1000, meta: run };
+}
+
+/** Image or audio classification: top-k labels. */
+export async function classifyMedia(
+  src: string,
+  topK: number,
+  opts: LoadOptions
+): Promise<{ labels: { label: string; score: number }[]; meta: LoadedRun }> {
+  const run = await getRun(opts);
+  const out = (await run.call(src, { top_k: topK })) as { label: string; score: number }[];
+  return { labels: out.map((x) => ({ label: x.label, score: Math.round(x.score * 1000) / 1000 })), meta: run };
+}
+
+/** Open-vocabulary detection: boxes for whatever the text queries describe. */
+export async function detectZeroShot(
+  imageSrc: string,
+  queries: string[],
+  threshold: number,
+  opts: LoadOptions
+): Promise<{ boxes: DetectedBox[]; width: number; height: number; meta: LoadedRun }> {
+  const run = await getRun(opts);
+  const raw = (await run.call(imageSrc, queries, { threshold })) as {
+    score: number;
+    label: string;
+    box: { xmin: number; ymin: number; xmax: number; ymax: number };
+  }[];
+  const size = await naturalSize(imageSrc);
+  const boxes: DetectedBox[] = raw.map((d) => ({
+    label: d.label,
+    labelEn: d.label,
+    score: Math.round(d.score * 1000) / 1000,
+    x: clamp01(d.box.xmin / size.width),
+    y: clamp01(d.box.ymin / size.height),
+    w: clamp01((d.box.xmax - d.box.xmin) / size.width),
+    h: clamp01((d.box.ymax - d.box.ymin) / size.height),
+  }));
+  return { boxes, width: size.width, height: size.height, meta: run };
 }

@@ -10,6 +10,7 @@
  * Entries absent from this table keep running on the deterministic simulator.
  */
 import type { L } from '../types';
+import { MP_URL, type MpKind } from '../engine/mediapipe';
 
 export interface RealModelSpec {
   /** Hugging Face repo that ships `onnx/model*.onnx`. */
@@ -17,9 +18,19 @@ export interface RealModelSpec {
   /**
    * Transformers.js task name. Every value here must exist in
    * `node_modules/@huggingface/transformers/src/pipelines/` — that directory is
-   * the authoritative list of what the library actually implements.
+   * the authoritative list of what the library actually implements. `mediapipe`
+   * is the exception: it runs via @mediapipe/tasks-vision, see `mp`.
    */
   task:
+    | 'mediapipe'
+    | 'tesseract'
+    | 'token-classification'
+    | 'question-answering'
+    | 'image-classification'
+    | 'audio-classification'
+    | 'zero-shot-object-detection'
+    | 'rnnoise'
+    | 'onnxruntime'
     | 'text-classification'
     | 'zero-shot-classification'
     | 'zero-shot-image-classification'
@@ -38,6 +49,12 @@ export interface RealModelSpec {
     | 'depth-estimation'
     | 'image-feature-extraction'
     | 'document-question-answering';
+  /** Custom ONNX graph to run when `task` is 'onnxruntime' (`repo` is then the model URL). */
+  ort?: 'migan' | 'demucs';
+  /** Demucs variant (4 or 6 stems). */
+  stems?: '4' | '6';
+  /** MediaPipe task to run when `task` is 'mediapipe' (`repo` is then the model URL). */
+  mp?: MpKind;
   /** Quantisation used for the download. */
   dtype: string;
   /** One sentence explaining what actually runs. */
@@ -330,18 +347,18 @@ export const REAL_MODELS: Record<string, RealModelSpec> = {
     dtype: 'q8',
     substitute: true,
     note: {
-      zh: 'Silero 没有 ONNX 浏览器版，这里用 Meta MMS 英语 TTS 作为替身，波形由模型真实合成。',
-      en: 'Silero ships no ONNX browser build, so Meta MMS English TTS stands in — the waveform is synthesised for real.',
+      zh: '（仅英文文本）Silero 没有 ONNX 浏览器版，这里用 Meta MMS 英语 TTS 作为替身，波形由模型真实合成。',
+      en: '(English text only) Silero ships no ONNX browser build, so Meta MMS English TTS stands in — the waveform is synthesised for real.',
     },
   },
   'audio/tts/kokoro-82m-fp32': {
-    repo: 'Xenova/speecht5_tts',
+    repo: 'onnx-community/Supertonic-TTS-ONNX',
     task: 'text-to-audio',
-    dtype: 'q8',
+    dtype: 'fp32',
     substitute: true,
     note: {
-      zh: '当前运行时认不出 Kokoro 的 style_text_to_speech_2 架构，改用 SpeechT5（编码器 + 解码器 + 声码器，约 170 MB）做真实语音合成。',
-      en: 'This runtime cannot load Kokoro’s style_text_to_speech_2 architecture, so SpeechT5 (encoder + decoder + vocoder, ~170 MB) does the real synthesis.',
+      zh: '（仅英文文本）当前运行时认不出 Kokoro 的 style_text_to_speech_2 架构，改用 Supertonic TTS（文本编码器 + 潜变量去噪器 + 声码器，约 260 MB，44.1 kHz）做真实语音合成。',
+      en: '(English text only) This runtime cannot load Kokoro’s style_text_to_speech_2 architecture, so Supertonic TTS (text encoder + latent denoiser + vocoder, ~260 MB, 44.1 kHz) does the real synthesis.',
     },
   },
 
@@ -408,6 +425,139 @@ export const REAL_MODELS: Record<string, RealModelSpec> = {
     note: {
       zh: 'Pegasus / DistilBART 的浏览器权重超过 340 MB，改用 T5-small 做真实摘要（偏抽取式，不像 XSum 那样一句话概括）。',
       en: 'Pegasus / DistilBART browser weights exceed 340 MB, so T5-small summarises for real (more extractive than XSum-style one-liners).',
+    },
+  },
+  'vision/ocr/tesseractjs': {
+    repo: 'tesseract.js',
+    task: 'tesseract',
+    dtype: 'fast',
+    note: {
+      zh: '真实权重：Tesseract.js（WASM 引擎 + 对应语言的 fast 训练数据，首次运行从 CDN 下载并缓存），逐行返回坐标与置信度。',
+      en: 'Real weights: Tesseract.js (WASM engine + fast traineddata per language, fetched from a CDN on first run and cached) with per-line boxes and confidence.',
+    },
+  },
+  'video/video-understanding/mediapipe-classifier': {
+    repo: MP_URL['classify'],
+    task: 'mediapipe',
+    mp: 'classify',
+    dtype: 'float32',
+    substitute: true,
+    note: {
+      zh: 'MediaPipe 没有公开的视频动作分类器，这里对抽样帧逐帧运行 EfficientNet-Lite0（约 18 MB，ImageNet 1000 类），并把相邻同类帧合并成时间段。',
+      en: 'MediaPipe ships no public video action classifier, so EfficientNet-Lite0 (~18 MB, ImageNet-1k) classifies each sampled frame and adjacent frames with the same label merge into segments.',
+    },
+  },
+  'generative-vision/inpainting/mi-gan-watermark': {
+    repo: 'https://huggingface.co/anyisalin/migan-onnx/resolve/main/onnx/migan_pipeline.onnx',
+    task: 'onnxruntime',
+    ort: 'migan',
+    dtype: 'uint8',
+    note: {
+      zh: '真实权重：MI-GAN 修补网络（28 MB ONNX，onnxruntime-web）。只替换你涂抹的区域，其余像素保持原样。',
+      en: 'Real weights: the MI-GAN inpainting network (28 MB ONNX on onnxruntime-web). Only the area you painted is replaced.',
+    },
+  },
+  'generative-vision/inpainting/lama-watermark': {
+    repo: 'https://huggingface.co/anyisalin/migan-onnx/resolve/main/onnx/migan_pipeline.onnx',
+    task: 'onnxruntime',
+    ort: 'migan',
+    dtype: 'uint8',
+    substitute: true,
+    note: {
+      zh: 'LaMa 的 ONNX 约 208 MB 且无法在 wasm 端建立会话，这里换用同类的 MI-GAN（28 MB）真实修补。',
+      en: 'LaMa’s ~208 MB ONNX does not load on the wasm backend, so MI-GAN (28 MB) performs the real inpainting instead.',
+    },
+  },
+  'audio/denoising/rnnoise-wasm': {
+    repo: '@jitsi/rnnoise-wasm',
+    task: 'rnnoise',
+    dtype: 'fp32',
+    note: {
+      zh: '真实权重：RNNoise（GRU 噪声抑制，权重内嵌在 WASM 中），按 48 kHz / 10 ms 帧逐帧处理。「降噪强度」控制干声回混比例。',
+      en: 'Real weights: RNNoise (GRU suppressor, weights embedded in the WASM) processing 10 ms frames at 48 kHz. “Reduction strength” controls how much dry signal is mixed back.',
+    },
+  },
+  'audio/denoising/deepfilternet': {
+    repo: '@jitsi/rnnoise-wasm',
+    task: 'rnnoise',
+    dtype: 'fp32',
+    substitute: true,
+    note: {
+      zh: 'DeepFilterNet 没有可用的浏览器 ONNX 权重，改用 RNNoise 做真实降噪。',
+      en: 'DeepFilterNet has no usable browser ONNX weights; RNNoise performs the real denoising instead.',
+    },
+  },
+  'audio/denoising/facebook-denoiser': {
+    repo: '@jitsi/rnnoise-wasm',
+    task: 'rnnoise',
+    dtype: 'fp32',
+    substitute: true,
+    note: {
+      zh: 'Facebook Denoiser 没有可用的浏览器 ONNX 权重，改用 RNNoise 做真实降噪。',
+      en: 'Facebook Denoiser has no usable browser ONNX weights; RNNoise performs the real denoising instead.',
+    },
+  },
+  'audio/source-separation/htdemucs-4-stem': {
+    repo: 'https://huggingface.co/StemSplitio/htdemucs-onnx/resolve/main/htdemucs_fp16weights.onnx',
+    task: 'onnxruntime',
+    ort: 'demucs',
+    stems: '4',
+    dtype: 'fp16',
+    note: {
+      zh: '真实权重：HT-Demucs 4 轨（166 MB ONNX，Worker 中单线程 wasm 推理，7.8 秒分段重叠相加）。较慢，请耐心等待。',
+      en: 'Real weights: HT-Demucs 4-stem (166 MB ONNX, single-thread wasm in a Worker, 7.8 s overlap-add segments). Slow — be patient.',
+    },
+  },
+  'audio/source-separation/htdemucs-6-stem': {
+    repo: 'https://huggingface.co/StemSplitio/htdemucs-6s-onnx/resolve/main/htdemucs_6s_fp16weights.onnx',
+    task: 'onnxruntime',
+    ort: 'demucs',
+    stems: '6',
+    dtype: 'fp16',
+    note: {
+      zh: '真实权重：HT-Demucs 6 轨（136 MB ONNX），额外分出吉他与钢琴。选「2 轨」时输出人声 + 伴奏。',
+      en: 'Real weights: HT-Demucs 6-stem (136 MB ONNX) adding guitar and piano. “2 stems” yields vocals + instrumental.',
+    },
+  },
+  'audio/source-separation/open-unmix': {
+    repo: 'https://huggingface.co/StemSplitio/htdemucs-onnx/resolve/main/htdemucs_fp16weights.onnx',
+    task: 'onnxruntime',
+    ort: 'demucs',
+    stems: '4',
+    dtype: 'fp16',
+    substitute: true,
+    note: {
+      zh: 'Open-Unmix 没有可用的浏览器 ONNX 权重，改用 HT-Demucs 4 轨（166 MB）做真实分离。',
+      en: 'Open-Unmix has no usable browser ONNX weights; HT-Demucs 4-stem (166 MB) performs the real separation instead.',
+    },
+  },
+  'text/summarization/t5-small': {
+    repo: 'Xenova/t5-small',
+    task: 'summarization',
+    dtype: 'q8',
+    note: {
+      zh: '真实权重：T5-small（约 60 MB）逐 token 生成摘要，偏抽取式。',
+      en: 'Real weights: T5-small (~60 MB) generates the summary token by token; output is fairly extractive.',
+    },
+  },
+  'vision/image-restoration/nafnet-denoise': {
+    repo: 'Xenova/swin2SR-lightweight-x2-64',
+    task: 'image-to-image',
+    dtype: 'q8',
+    substitute: true,
+    note: {
+      zh: 'NAFNet 无浏览器 ONNX 权重，改用轻量 Swin2SR（2 倍重建）作替身，输出像素由模型真实生成。',
+      en: 'NAFNet has no browser ONNX weights; the lightweight Swin2SR (2x reconstruction) stands in. Output pixels are generated by the model.',
+    },
+  },
+  'audio/tts/piper-tts': {
+    repo: 'Xenova/mms-tts-eng',
+    task: 'text-to-audio',
+    dtype: 'q8',
+    substitute: true,
+    note: {
+      zh: '（仅英文文本）Piper 没有 Transformers.js 可加载的权重，这里用 Meta MMS 英语 TTS 作替身，波形由模型真实合成。',
+      en: '(English text only) Piper has no Transformers.js-loadable weights, so Meta MMS English TTS stands in — the waveform is synthesised for real.',
     },
   },
 
@@ -548,6 +698,450 @@ export const REAL_MODELS: Record<string, RealModelSpec> = {
     note: {
       zh: '真实权重：Qwen2.5-Coder-0.5B-Instruct（约 530 MB）真实生成代码片段，逐 token 输出。',
       en: 'Real weights: Qwen2.5-Coder-0.5B-Instruct (~530 MB) generates code token by token.',
+    },
+  },
+
+  /* ------------------------------------------------ real-time (MediaPipe) */
+  'real-time/face/mediapipe-facedetection': {
+    repo: MP_URL['face-detect'],
+    task: 'mediapipe',
+    mp: 'face-detect',
+    dtype: 'float16',
+    note: {
+      zh: '真实权重：MediaPipe BlazeFace 短距离人脸检测（约 3.7 MB），框与 6 个关键点均来自模型。',
+      en: 'Real weights: MediaPipe BlazeFace short-range face detector (~3.7 MB); the box and 6 keypoints come from the model.',
+    },
+  },
+  'real-time/face/mediapipe-facemesh': {
+    repo: MP_URL['face-mesh'],
+    task: 'mediapipe',
+    mp: 'face-mesh',
+    dtype: 'float16',
+    note: {
+      zh: '真实权重：MediaPipe Face Landmarker（约 3.7 MB），输出 478 个人脸关键点。',
+      en: 'Real weights: MediaPipe Face Landmarker (~3.7 MB), 478 face landmarks.',
+    },
+  },
+  'real-time/face/blazeface': {
+    repo: MP_URL['face-detect'],
+    task: 'mediapipe',
+    mp: 'face-detect',
+    dtype: 'float16',
+    substitute: true,
+    note: {
+      zh: 'TFJS 版 BlazeFace 与此为同一架构，这里加载 TFLite 版，MediaPipe BlazeFace 短距离人脸检测（约 3.7 MB）。',
+      en: 'The TFJS BlazeFace is the same architecture; the TFLite build is loaded instead. ~3.7 MB.',
+    },
+  },
+  'real-time/pose/mediapipe-pose': {
+    repo: MP_URL['pose'],
+    task: 'mediapipe',
+    mp: 'pose',
+    dtype: 'float16',
+    note: {
+      zh: '真实权重：MediaPipe BlazePose Lite（约 5.8 MB），输出 33 个人体关键点。',
+      en: 'Real weights: MediaPipe BlazePose Lite (~5.8 MB), 33 body landmarks.',
+    },
+  },
+  'real-time/pose/mediapipe-pose-landmarker': {
+    repo: MP_URL['pose'],
+    task: 'mediapipe',
+    mp: 'pose',
+    dtype: 'float16',
+    note: {
+      zh: '真实权重：MediaPipe BlazePose Lite（约 5.8 MB），输出 33 个人体关键点。',
+      en: 'Real weights: MediaPipe BlazePose Lite (~5.8 MB), 33 body landmarks.',
+    },
+  },
+  'real-time/pose/movenet': {
+    repo: MP_URL['pose'],
+    task: 'mediapipe',
+    mp: 'pose',
+    dtype: 'float16',
+    substitute: true,
+    note: {
+      zh: 'MoveNet 无 TFLite 浏览器包，换用 BlazePose Lite（33 点），MediaPipe BlazePose Lite（约 5.8 MB）。',
+      en: 'MoveNet has no browser-ready bundle; BlazePose Lite (33 points) stands in. ~5.8 MB.',
+    },
+  },
+  'real-time/pose/posenet': {
+    repo: MP_URL['pose'],
+    task: 'mediapipe',
+    mp: 'pose',
+    dtype: 'float16',
+    substitute: true,
+    note: {
+      zh: 'PoseNet 无 TFLite 浏览器包，换用 BlazePose Lite（33 点），MediaPipe BlazePose Lite（约 5.8 MB）。',
+      en: 'PoseNet has no browser-ready bundle; BlazePose Lite (33 points) stands in. ~5.8 MB.',
+    },
+  },
+  'real-time/hand/mediapipe-hands': {
+    repo: MP_URL['hand'],
+    task: 'mediapipe',
+    mp: 'hand',
+    dtype: 'float16',
+    note: {
+      zh: '真实权重：MediaPipe Gesture Recognizer（手部检测 + 21 点关键点 + 手势分类，约 8 MB）。',
+      en: 'Real weights: MediaPipe Gesture Recognizer (hand detector + 21 landmarks + gesture classifier, ~8 MB).',
+    },
+  },
+  'real-time/hand/mediapipe-handlandmarker': {
+    repo: MP_URL['hand'],
+    task: 'mediapipe',
+    mp: 'hand',
+    dtype: 'float16',
+    note: {
+      zh: '真实权重：MediaPipe Gesture Recognizer（手部检测 + 21 点关键点 + 手势分类，约 8 MB）。',
+      en: 'Real weights: MediaPipe Gesture Recognizer (hand detector + 21 landmarks + gesture classifier, ~8 MB).',
+    },
+  },
+  'real-time/tracking/bytetrack-wasm': {
+    repo: MP_URL['object'],
+    task: 'mediapipe',
+    mp: 'object',
+    dtype: 'float16',
+    substitute: true,
+    note: {
+      zh: 'ByteTrack 需要外部检测器，这里用：MediaPipe EfficientDet-Lite0（约 4.4 MB）逐帧检测，再用 IoU 关联分配稳定 ID。',
+      en: 'ByteTrack needs an external detector; this uses MediaPipe EfficientDet-Lite0 (~4.4 MB) per frame, then IoU association assigns persistent IDs.',
+    },
+  },
+  'real-time/tracking/mediapipe-holistic': {
+    repo: MP_URL['object'],
+    task: 'mediapipe',
+    mp: 'object',
+    dtype: 'float16',
+    substitute: true,
+    note: {
+      zh: 'Holistic 不是多目标跟踪器，这里改为：MediaPipe EfficientDet-Lite0（约 4.4 MB）逐帧检测，再用 IoU 关联分配稳定 ID。',
+      en: 'Holistic is not a multi-object tracker; this uses MediaPipe EfficientDet-Lite0 (~4.4 MB) per frame, then IoU association assigns persistent IDs.',
+    },
+  },
+  'real-time/tracking/mediapipe-objectron': {
+    repo: MP_URL['object'],
+    task: 'mediapipe',
+    mp: 'object',
+    dtype: 'float16',
+    substitute: true,
+    note: {
+      zh: 'Objectron 无公开 Web 权重，这里改为：MediaPipe EfficientDet-Lite0（约 4.4 MB）逐帧检测，再用 IoU 关联分配稳定 ID。',
+      en: 'Objectron has no public web weights; this uses MediaPipe EfficientDet-Lite0 (~4.4 MB) per frame, then IoU association assigns persistent IDs.',
+    },
+  },
+
+  'text/translation/nllb-200': {
+    repo: 'Xenova/opus-mt-en-zh',
+    task: 'translation',
+    dtype: 'q8',
+    substitute: true,
+    note: {
+      zh: 'NLLB-200 的浏览器权重过大（约 600 MB），改用 Marian OPUS-MT 英↔中（约 107 MB）做真实翻译，仅覆盖中英方向。',
+      en: 'NLLB-200 is too large for the browser (~600 MB), so Marian OPUS-MT en↔zh (~107 MB) translates for real; only the English/Chinese pair is covered.',
+    },
+  },
+  'text/translation/m2m100-418m': {
+    repo: 'Xenova/opus-mt-en-zh',
+    task: 'translation',
+    dtype: 'q8',
+    substitute: true,
+    note: {
+      zh: 'M2M100 的浏览器权重约 1.7 GB，改用 Marian OPUS-MT 英↔中（约 107 MB）做真实翻译，仅覆盖中英方向。',
+      en: 'M2M100 is ~1.7 GB in the browser, so Marian OPUS-MT en↔zh (~107 MB) translates for real; only the English/Chinese pair is covered.',
+    },
+  },
+  'text/summarization/bart-large-cnn': {
+    repo: 'Xenova/t5-small',
+    task: 'summarization',
+    dtype: 'q8',
+    substitute: true,
+    note: {
+      zh: 'BART-large-CNN 的浏览器权重约 400 MB，改用 T5-small（约 60 MB）做真实摘要，偏抽取式。',
+      en: 'BART-large-CNN is ~400 MB in the browser, so T5-small (~60 MB) summarises for real; output is fairly extractive.',
+    },
+  },
+  'search-rag/reranker/bge-reranker-base': {
+    repo: 'Xenova/bge-reranker-base',
+    task: 'text-classification',
+    dtype: 'q8',
+    note: {
+      zh: '真实权重：BGE Reranker Base 交叉编码器（约 279 MB），对每个 query–文档对直接打相关性分。',
+      en: 'Real weights: the BGE Reranker Base cross-encoder (~279 MB) scores every query–document pair directly.',
+    },
+  },
+  'llm/chat/llama-3-8b-instruct': {
+    repo: 'onnx-community/Qwen2.5-0.5B-Instruct',
+    task: 'text-generation',
+    dtype: 'q4f16',
+    substitute: true,
+    note: {
+      zh: 'Llama-3-8B 的浏览器权重超过 0.7 GB，改用 Qwen2.5-0.5B-Instruct（约 460 MB）做真实多轮生成。',
+      en: 'Llama-3-8B exceeds ~0.7 GB in the browser, so Qwen2.5-0.5B-Instruct (~460 MB) generates the replies for real.',
+    },
+  },
+  'llm/chat/tinyllama-1.1b': {
+    repo: 'onnx-community/Qwen2.5-0.5B-Instruct',
+    task: 'text-generation',
+    dtype: 'q4f16',
+    substitute: true,
+    note: {
+      zh: 'TinyLlama-1.1B 的浏览器权重超过 0.7 GB，改用 Qwen2.5-0.5B-Instruct（约 460 MB）做真实多轮生成。',
+      en: 'TinyLlama-1.1B exceeds ~0.7 GB in the browser, so Qwen2.5-0.5B-Instruct (~460 MB) generates the replies for real.',
+    },
+  },
+  'llm/chat/gemma-2-2b-it': {
+    repo: 'onnx-community/Qwen2.5-0.5B-Instruct',
+    task: 'text-generation',
+    dtype: 'q4f16',
+    substitute: true,
+    note: {
+      zh: 'Gemma-2-2B 的浏览器权重超过 0.7 GB，改用 Qwen2.5-0.5B-Instruct（约 460 MB）做真实多轮生成。',
+      en: 'Gemma-2-2B exceeds ~0.7 GB in the browser, so Qwen2.5-0.5B-Instruct (~460 MB) generates the replies for real.',
+    },
+  },
+  'llm/chat/smollm2-1.7b': {
+    repo: 'onnx-community/Qwen2.5-0.5B-Instruct',
+    task: 'text-generation',
+    dtype: 'q4f16',
+    substitute: true,
+    note: {
+      zh: 'SmolLM2-1.7B 的浏览器权重超过 0.7 GB，改用 Qwen2.5-0.5B-Instruct（约 460 MB）做真实多轮生成。',
+      en: 'SmolLM2-1.7B exceeds ~0.7 GB in the browser, so Qwen2.5-0.5B-Instruct (~460 MB) generates the replies for real.',
+    },
+  },
+  'llm/chat/deepseek-r1-distill-qwen-1.5b': {
+    repo: 'onnx-community/Qwen2.5-0.5B-Instruct',
+    task: 'text-generation',
+    dtype: 'q4f16',
+    substitute: true,
+    note: {
+      zh: 'DeepSeek-R1-Distill-1.5B 的浏览器权重超过 0.7 GB，改用 Qwen2.5-0.5B-Instruct（约 460 MB）做真实多轮生成。',
+      en: 'DeepSeek-R1-Distill-1.5B exceeds ~0.7 GB in the browser, so Qwen2.5-0.5B-Instruct (~460 MB) generates the replies for real.',
+    },
+  },
+  'llm/structured-output/instructor-xl': {
+    repo: 'onnx-community/Qwen2.5-0.5B-Instruct',
+    task: 'text-generation',
+    dtype: 'q4f16',
+    substitute: true,
+    note: {
+      zh: 'Instructor-XL 体积过大，改用 Qwen2.5-0.5B-Instruct 按 Schema 提示真实生成 JSON，合法性由前端再校验。',
+      en: 'Instructor-XL is too large for the browser, so Qwen2.5-0.5B-Instruct generates JSON from the schema prompt for real; the front end still validates it.',
+    },
+  },
+  'llm/structured-output/outline-llama': {
+    repo: 'onnx-community/Qwen2.5-0.5B-Instruct',
+    task: 'text-generation',
+    dtype: 'q4f16',
+    substitute: true,
+    note: {
+      zh: 'Outlines + Llama 体积过大，改用 Qwen2.5-0.5B-Instruct 按 Schema 提示真实生成 JSON，合法性由前端再校验。',
+      en: 'Outlines + Llama is too large for the browser, so Qwen2.5-0.5B-Instruct generates JSON from the schema prompt for real; the front end still validates it.',
+    },
+  },
+  'llm/code/codellama-7b': {
+    repo: 'onnx-community/Qwen2.5-Coder-0.5B-Instruct',
+    task: 'text-generation',
+    dtype: 'q4f16',
+    substitute: true,
+    note: {
+      zh: 'CodeLlama-7B 的浏览器权重过大，改用 Qwen2.5-Coder-0.5B-Instruct（约 530 MB）真实生成代码。',
+      en: 'CodeLlama-7B is too large for the browser, so Qwen2.5-Coder-0.5B-Instruct (~530 MB) generates the code for real.',
+    },
+  },
+  'llm/code/starcoder2-3b': {
+    repo: 'onnx-community/Qwen2.5-Coder-0.5B-Instruct',
+    task: 'text-generation',
+    dtype: 'q4f16',
+    substitute: true,
+    note: {
+      zh: 'StarCoder2-3B 的浏览器权重过大，改用 Qwen2.5-Coder-0.5B-Instruct（约 530 MB）真实生成代码。',
+      en: 'StarCoder2-3B is too large for the browser, so Qwen2.5-Coder-0.5B-Instruct (~530 MB) generates the code for real.',
+    },
+  },
+  'multimodal/vlm/llava-1.5-7b': {
+    repo: 'Xenova/vit-gpt2-image-captioning',
+    task: 'image-to-text',
+    dtype: 'q8',
+    substitute: true,
+    note: {
+      zh: 'LLaVA-1.5-7B 在当前运行时无法加载，改用 ViT-GPT2 做真实图像描述；多轮视觉问答暂不支持。',
+      en: 'LLaVA-1.5-7B cannot be loaded by this runtime, so ViT-GPT2 captions the image for real; multi-turn VQA is not supported.',
+    },
+  },
+  'multimodal/vlm/paligemma-3b': {
+    repo: 'Xenova/vit-gpt2-image-captioning',
+    task: 'image-to-text',
+    dtype: 'q8',
+    substitute: true,
+    note: {
+      zh: 'PaliGemma-3B 在当前运行时无法加载，改用 ViT-GPT2 做真实图像描述；多轮视觉问答暂不支持。',
+      en: 'PaliGemma-3B cannot be loaded by this runtime, so ViT-GPT2 captions the image for real; multi-turn VQA is not supported.',
+    },
+  },
+  'multimodal/vlm/florence-2': {
+    repo: 'Xenova/vit-gpt2-image-captioning',
+    task: 'image-to-text',
+    dtype: 'q8',
+    substitute: true,
+    note: {
+      zh: 'Florence-2 在当前运行时无法加载，改用 ViT-GPT2 做真实图像描述；多轮视觉问答暂不支持。',
+      en: 'Florence-2 cannot be loaded by this runtime, so ViT-GPT2 captions the image for real; multi-turn VQA is not supported.',
+    },
+  },
+  'multimodal/document-understanding/layoutlmv3': {
+    repo: 'Xenova/donut-base-finetuned-cord-v2',
+    task: 'document-question-answering',
+    dtype: 'q8',
+    substitute: true,
+    note: {
+      zh: 'LayoutLMv3 需要外部 OCR，改用端到端的 Donut（约 209 MB）直接读文档并抽取字段。',
+      en: 'LayoutLMv3 needs an external OCR step, so the end-to-end Donut (~209 MB) reads the document and extracts fields directly.',
+    },
+  },
+
+  'audio/tts/bark-wasm': {
+    repo: 'onnx-community/Supertonic-TTS-ONNX',
+    task: 'text-to-audio',
+    dtype: 'fp32',
+    substitute: true,
+    note: {
+      zh: 'Bark 在浏览器里体积过大（仅英文文本），改用 Supertonic TTS（约 260 MB）做真实语音合成。',
+      en: 'Bark is too large for the browser, so Supertonic TTS (~260 MB) does the real synthesis.',
+    },
+  },
+  'generative-vision/inpainting/sdxl-inpaint': {
+    repo: 'https://huggingface.co/anyisalin/migan-onnx/resolve/main/onnx/migan_pipeline.onnx',
+    task: 'onnxruntime',
+    ort: 'migan',
+    dtype: 'uint8',
+    substitute: true,
+    note: {
+      zh: 'SDXL Inpaint（约 3.8 GB）无法在浏览器中运行，改用 MI-GAN（28 MB）真实修补涂抹区域。',
+      en: 'SDXL Inpaint (~3.8 GB) cannot run in the browser, so MI-GAN (28 MB) fills the painted area for real.',
+    },
+  },
+  'video/video-understanding/videoclip': {
+    repo: MP_URL['classify'],
+    task: 'mediapipe',
+    mp: 'classify',
+    dtype: 'float32',
+    substitute: true,
+    note: {
+      zh: 'VideoCLIP 的浏览器权重过大且无视频管线，改用 EfficientNet-Lite0（约 18 MB）对抽样帧逐帧分类，并把相邻同类帧合并成时间段。',
+      en: 'VideoCLIP is too large and has no video pipeline here, so EfficientNet-Lite0 (~18 MB) classifies each sampled frame and adjacent frames with the same label merge into segments.',
+    },
+  },
+  'video/video-understanding/xclip': {
+    repo: MP_URL['classify'],
+    task: 'mediapipe',
+    mp: 'classify',
+    dtype: 'float32',
+    substitute: true,
+    note: {
+      zh: 'X-CLIP 的浏览器权重过大且无视频管线，改用 EfficientNet-Lite0（约 18 MB）对抽样帧逐帧分类，并把相邻同类帧合并成时间段。',
+      en: 'X-CLIP is too large and has no video pipeline here, so EfficientNet-Lite0 (~18 MB) classifies each sampled frame and adjacent frames with the same label merge into segments.',
+    },
+  },
+  'video/video-understanding/videomae': {
+    repo: MP_URL['classify'],
+    task: 'mediapipe',
+    mp: 'classify',
+    dtype: 'float32',
+    substitute: true,
+    note: {
+      zh: 'VideoMAE 的浏览器权重过大且无视频管线，改用 EfficientNet-Lite0（约 18 MB）对抽样帧逐帧分类，并把相邻同类帧合并成时间段。',
+      en: 'VideoMAE is too large and has no video pipeline here, so EfficientNet-Lite0 (~18 MB) classifies each sampled frame and adjacent frames with the same label merge into segments.',
+    },
+  },
+
+  'text/token-classification/bert-base-ner': {
+    repo: 'Xenova/bert-base-NER',
+    task: 'token-classification',
+    dtype: 'q8',
+    note: {
+      zh: '真实权重：BERT-base CoNLL-2003 实体识别（约 109 MB），token 级预测后在前端合并为完整实体。',
+      en: 'Real weights: BERT-base fine-tuned on CoNLL-2003 (~109 MB); token predictions are merged into whole entities in the browser.',
+    },
+  },
+  'text/token-classification/distilbert-multilingual-ner': {
+    repo: 'Xenova/distilbert-base-multilingual-cased-ner-hrl',
+    task: 'token-classification',
+    dtype: 'q8',
+    note: {
+      zh: '真实权重：DistilBERT 多语言实体识别（约 135 MB），覆盖中文、英文等 10 种语言。',
+      en: 'Real weights: multilingual DistilBERT entity tagger (~135 MB) covering Chinese, English and 8 other languages.',
+    },
+  },
+  'text/question-answering/distilbert-squad': {
+    repo: 'Xenova/distilbert-base-cased-distilled-squad',
+    task: 'question-answering',
+    dtype: 'q8',
+    note: {
+      zh: '真实权重：DistilBERT SQuAD 抽取式问答（约 67 MB），答案是原文里的一个片段。',
+      en: 'Real weights: DistilBERT SQuAD extractive QA (~67 MB); the answer is a span of the passage.',
+    },
+  },
+  'text/question-answering/distilbert-squad-uncased': {
+    repo: 'Xenova/distilbert-base-uncased-distilled-squad',
+    task: 'question-answering',
+    dtype: 'q8',
+    note: {
+      zh: '真实权重：DistilBERT uncased SQuAD 问答（约 67 MB）。',
+      en: 'Real weights: DistilBERT uncased SQuAD QA (~67 MB).',
+    },
+  },
+  'vision/image-classification/mobilevit-small': {
+    repo: 'Xenova/mobilevit-small',
+    task: 'image-classification',
+    dtype: 'q8',
+    note: {
+      zh: '真实权重：MobileViT-small（约 6 MB）ImageNet-1k 分类。',
+      en: 'Real weights: MobileViT-small (~6 MB) ImageNet-1k classification.',
+    },
+  },
+  'vision/image-classification/resnet-50': {
+    repo: 'Xenova/resnet-50',
+    task: 'image-classification',
+    dtype: 'q8',
+    note: {
+      zh: '真实权重：ResNet-50（约 26 MB）ImageNet-1k 分类。',
+      en: 'Real weights: ResNet-50 (~26 MB) ImageNet-1k classification.',
+    },
+  },
+  'vision/image-classification/vit-base': {
+    repo: 'Xenova/vit-base-patch16-224',
+    task: 'image-classification',
+    dtype: 'q8',
+    note: {
+      zh: '真实权重：ViT-base（约 88 MB）ImageNet-1k 分类。',
+      en: 'Real weights: ViT-base (~88 MB) ImageNet-1k classification.',
+    },
+  },
+  'vision/zero-shot-detection/owlvit-base': {
+    repo: 'Xenova/owlvit-base-patch32',
+    task: 'zero-shot-object-detection',
+    dtype: 'q4f16',
+    note: {
+      zh: '真实权重：OWL-ViT（约 127 MB）开放词表检测，目标由你输入的文字描述决定。',
+      en: 'Real weights: OWL-ViT (~127 MB) open-vocabulary detector; targets are whatever you describe in text.',
+    },
+  },
+  'audio/audio-classification/ast-audioset': {
+    repo: 'Xenova/ast-finetuned-audioset-10-10-0.4593',
+    task: 'audio-classification',
+    dtype: 'q8',
+    note: {
+      zh: '真实权重：AST（约 91 MB）AudioSet 527 类声音事件分类。',
+      en: 'Real weights: AST (~91 MB) classifying 527 AudioSet sound events.',
+    },
+  },
+  'audio/audio-classification/wav2vec2-keyword-spotting': {
+    repo: 'Xenova/wav2vec2-base-superb-ks',
+    task: 'audio-classification',
+    dtype: 'q8',
+    note: {
+      zh: '真实权重：Wav2Vec2 关键词识别（约 96 MB），12 个语音指令（yes / no / up / down …）。',
+      en: 'Real weights: Wav2Vec2 keyword spotting (~96 MB) for 12 spoken commands (yes / no / up / down …).',
     },
   },
 

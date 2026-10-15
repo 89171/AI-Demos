@@ -200,6 +200,62 @@ export const DEMOS: Record<string, Record<string, DemoSpec>> = {
         ),
       ],
     },
+    'token-classification': {
+      category: 'text',
+      subcategory: 'token-classification',
+      tagline: t('找出文本里的人名、地名与机构', 'Find people, places and organisations in text'),
+      task: t(
+        '序列标注模型为每个 token 预测实体标签，再把相邻 token 合并成完整实体。英文模型只认英文；多语言模型也覆盖中文。',
+        'A sequence tagger labels every token, then adjacent tokens merge into whole entities. The English model reads English only; the multilingual one also covers Chinese.'
+      ),
+      inputMode: 'text',
+      outputKind: 'json',
+      params: [p('minScore', t('最低置信度', 'Minimum score'), 'range', 0.6, { min: 0.1, max: 0.99, step: 0.05 })],
+      samples: [
+        text(
+          'news-en',
+          t('英文新闻', 'English news'),
+          'Apple CEO Tim Cook met Microsoft chief Satya Nadella in London on Monday to discuss a partnership with the University of Oxford.',
+          'Apple CEO Tim Cook met Microsoft chief Satya Nadella in London on Monday to discuss a partnership with the University of Oxford.'
+        ),
+        text(
+          'news-zh',
+          t('中文新闻（需多语言模型）', 'Chinese news (multilingual model)'),
+          '苹果公司首席执行官蒂姆·库克周一在北京会见了清华大学校长，双方讨论了合作事宜。',
+          'Apple CEO Tim Cook met the president of Tsinghua University in Beijing on Monday to discuss cooperation.'
+        ),
+      ],
+    },
+
+    'question-answering': {
+      category: 'text',
+      subcategory: 'question-answering',
+      tagline: t('从段落里找出问题的答案', 'Find the answer to a question inside a passage'),
+      task: t(
+        '抽取式问答模型在给定文本中预测答案的起止位置，答案一定出自原文。模型为英文 SQuAD 微调。',
+        'An extractive QA model predicts the start and end of the answer span, so the answer is always quoted from the passage. The checkpoints are English SQuAD fine-tunes.'
+      ),
+      inputMode: 'text',
+      outputKind: 'text',
+      textFields: [{ key: 'question', label: t('问题', 'Question'), placeholder: t('例如：Who wrote the report?', 'e.g. Who wrote the report?') }],
+      samples: [
+        text(
+          'paris',
+          t('地理常识', 'Geography'),
+          'Paris is the capital and most populous city of France. Situated on the Seine River, in the north of the country, it has an estimated population of 2.1 million residents within its city limits. The Eiffel Tower, completed in 1889, is its best-known landmark.',
+          'Paris is the capital and most populous city of France. Situated on the Seine River, in the north of the country, it has an estimated population of 2.1 million residents within its city limits. The Eiffel Tower, completed in 1889, is its best-known landmark.',
+          { fields: { question: t('When was the Eiffel Tower completed?', 'When was the Eiffel Tower completed?') } }
+        ),
+        text(
+          'release',
+          t('产品发布', 'Product release'),
+          'Acme Cloud 3.0 was released on March 14 by the platform team led by Dana Whitfield. It adds a streaming API, cuts cold-start latency by 40 percent, and drops support for Python 3.8.',
+          'Acme Cloud 3.0 was released on March 14 by the platform team led by Dana Whitfield. It adds a streaming API, cuts cold-start latency by 40 percent, and drops support for Python 3.8.',
+          { fields: { question: t('Who led the team?', 'Who led the team?') } }
+        ),
+      ],
+    },
+
   },
 
   /* ==================================================================== llm */
@@ -590,6 +646,42 @@ export const DEMOS: Record<string, Record<string, DemoSpec>> = {
         img('pnoisy', t('噪点人像', 'Noisy portrait'), 'portrait-noisy.png', t('人物肤色区域噪声', 'Noise across skin tones'), 'portrait.png'),
       ],
     },
+    'image-classification': {
+      category: 'vision',
+      subcategory: 'image-classification',
+      tagline: t('判断整张图片属于哪一类', 'Decide what a whole image shows'),
+      task: t(
+        '分类网络对整张图片输出 ImageNet 1000 类的概率分布，返回前几名。',
+        'A classifier outputs a probability distribution over the 1000 ImageNet classes for the whole image and returns the top few.'
+      ),
+      inputMode: 'image',
+      outputKind: 'labels',
+      params: [p('topK', t('返回条数', 'Top-K'), 'range', 5, { min: 1, max: 10, step: 1 })],
+      samples: [
+        img('street', t('城市街景', 'Street scene'), 'street.png'),
+        img('desk', t('桌面物品', 'Desk objects'), 'desk.png'),
+        img('portrait', t('人像', 'Portrait'), 'portrait.png'),
+      ],
+    },
+
+    'zero-shot-detection': {
+      category: 'vision',
+      subcategory: 'zero-shot-detection',
+      tagline: t('用一句话描述想找的目标', 'Describe the objects you want in words'),
+      task: t(
+        '开放词表检测把文字查询编码为向量，与每个候选框比对，所以不局限于训练时的固定类别。',
+        'Open-vocabulary detection encodes text queries and matches them against every candidate box, so it is not limited to a fixed label set.'
+      ),
+      inputMode: 'image',
+      outputKind: 'detection',
+      textFields: [{ key: 'labels', label: t('目标描述（逗号分隔）', 'Queries (comma separated)'), placeholder: t('a person, a car, a traffic light', 'a person, a car, a traffic light') }],
+      params: [p('conf', t('置信度阈值', 'Confidence threshold'), 'range', 0.1, { min: 0.02, max: 0.6, step: 0.02 })],
+      samples: [
+        media('street', t('城市街景', 'Street scene'), 'street.png', { labels: t('a person, a car, a traffic light', 'a person, a car, a traffic light') }),
+        media('desk', t('桌面物品', 'Desk objects'), 'desk.png', { labels: t('a laptop, a cup, a keyboard', 'a laptop, a cup, a keyboard') }),
+      ],
+    },
+
   },
 
   /* ====================================================== generative-vision */
@@ -780,6 +872,24 @@ export const DEMOS: Record<string, Record<string, DemoSpec>> = {
         aud('zhmix', t('中文人声 + 伴奏', 'Chinese vocal + backing'), 'mix-zh-music.mp3'),
       ],
     },
+    'audio-classification': {
+      category: 'audio',
+      subcategory: 'audio-classification',
+      tagline: t('识别一段声音里发生了什么', 'Recognise what is happening in a sound clip'),
+      task: t(
+        '音频分类模型把频谱映射到声音事件（AudioSet 527 类）或语音指令，返回置信度最高的几类。',
+        'An audio classifier maps the spectrogram to sound events (AudioSet 527 classes) or spoken commands and returns the top classes.'
+      ),
+      inputMode: 'audio',
+      outputKind: 'labels',
+      params: [p('topK', t('返回条数', 'Top-K'), 'range', 5, { min: 1, max: 10, step: 1 })],
+      samples: [
+        aud('speech', t('英语语音', 'English speech'), 'speech-en.mp3'),
+        aud('mix', t('人声 + 音乐', 'Vocals with music'), 'mix-en-music.mp3'),
+        aud('music', t('纯音乐', 'Music bed'), 'music-bed.mp3'),
+      ],
+    },
+
   },
 
   /* ======================================================== generative-audio */

@@ -1,7 +1,17 @@
 import type { ModelCatalog, ModelEntry } from '../types';
 import raw from './models.json';
+import extra from './extra-models.json';
 
-export const MODELS = raw as unknown as ModelCatalog;
+// models.json is regenerated from ../WebAIModels by scripts/extract-models.cjs; entries that
+// the upstream catalogue does not list live in extra-models.json so a re-extract cannot drop them.
+const merged = Object.fromEntries(
+  [...new Set([...Object.keys(raw), ...Object.keys(extra)])].map((c) => [
+    c,
+    { ...(raw as Record<string, object>)[c], ...(extra as Record<string, object>)[c] },
+  ])
+);
+
+export const MODELS = merged as unknown as ModelCatalog;
 
 export const listModels = (category: string, subcategory: string): ModelEntry[] =>
   MODELS[category]?.[subcategory] ?? [];
