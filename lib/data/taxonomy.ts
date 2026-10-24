@@ -93,6 +93,21 @@ export const TAXONOMY: TaxonomyEntry[] = [
         blurb: { zh: '前景抠图与区域掩码', en: 'Foreground matting and region masks' },
       },
       {
+        slug: 'background-removal',
+        name: { zh: '图片去背景', en: 'Background Removal' },
+        blurb: { zh: '一键把主体从画面中分离', en: 'One-click subject cutout from a photo' },
+      },
+      {
+        slug: 'watermark-removal',
+        name: { zh: '图片去水印', en: 'Watermark Removal' },
+        blurb: { zh: '涂抹水印区域并修复补全', en: 'Brush over a watermark and inpaint it away' },
+      },
+      {
+        slug: 'object-removal',
+        name: { zh: '图片擦除', en: 'Object Removal' },
+        blurb: { zh: '抹掉多余物体并重建背景', en: 'Erase clutter and rebuild what is behind it' },
+      },
+      {
         slug: 'ocr',
         name: { zh: '文字识别', en: 'OCR' },
         blurb: { zh: '图片文字提取与版面分析', en: 'Text extraction and layout analysis' },
@@ -106,6 +121,16 @@ export const TAXONOMY: TaxonomyEntry[] = [
         slug: 'image-restoration',
         name: { zh: '图像增强修复', en: 'Image Restoration' },
         blurb: { zh: '超分、去噪与去模糊', en: 'Super-resolution, denoise and deblur' },
+      },
+      {
+        slug: 'super-resolution',
+        name: { zh: '图片无损放大', en: 'Super Resolution' },
+        blurb: { zh: '从已有像素重建更大的图', en: 'Rebuild a larger image from existing pixels' },
+      },
+      {
+        slug: 'image-enhancement',
+        name: { zh: '图片清晰增强', en: 'Image Enhancement' },
+        blurb: { zh: '去噪去模糊，恢复清晰度', en: 'Denoise, deblur and restore clarity' },
       },
       {
         slug: 'image-classification',

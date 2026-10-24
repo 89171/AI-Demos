@@ -17,19 +17,37 @@ fs.writeFileSync(tmp, src);
 const MODELS = require(tmp);
 fs.unlinkSync(tmp);
 
+const MB = 1024 * 1024;
+// Largest pinned variant download, rounded like "~33.4 MB". Variants are
+// alternative precisions of the same model, not additive parts.
+function sizeOf(m) {
+  const bytes = (m.variants ?? [])
+    .map((v) => v.downloadBytes)
+    .filter((n) => typeof n === 'number');
+  if (!bytes.length) return m.size ?? '—';
+  return `~${(Math.max(...bytes) / MB).toFixed(1)} MB`;
+}
+
+// Upstream subcategories the playground cannot host yet:
+// - text/ner: same task as text/token-classification, which AI-Demos already ships.
+// - audio/vad: needs a speech-timeline output kind the playground lacks.
+// - video/video-watermark-removal: needs decoded-video output (WebCodecs pipeline).
+const SKIP = new Set(['text/ner', 'audio/vad', 'video/video-watermark-removal']);
+
 const slim = {};
 for (const [cat, subs] of Object.entries(MODELS)) {
   slim[cat] = {};
   for (const [sub, models] of Object.entries(subs)) {
+    if (SKIP.has(`${cat}/${sub}`)) continue;
     slim[cat][sub] = models.map((m) => ({
       id: m.id,
       name: m.name,
       framework: m.framework,
-      size: m.size,
-      license: m.license,
-      languages: m.languages,
+      size: sizeOf(m),
+      license: m.weightLicense ?? m.codeLicense ?? '—',
+      languages: m.naturalLanguages ?? [],
       description: m.description,
-      demoUrl: m.demoUrl,
+      demoUrl: m.demoBase && m.demoPath ? m.demoBase + m.demoPath : m.demoUrl,
       docsUrl: m.docsUrl,
     }));
   }

@@ -566,6 +566,89 @@ export const DEMOS: Record<string, Record<string, DemoSpec>> = {
       ],
     },
 
+    'background-removal': {
+      category: 'vision',
+      subcategory: 'background-removal',
+      tagline: t('一键去掉图片背景', 'Remove an image background in one click'),
+      task: t(
+        '抠图模型为整张图预测 alpha 通道，主体保留、背景透明，适合证件照与商品图。',
+        'A matting model predicts a per-pixel alpha channel — the subject stays, the background turns transparent.'
+      ),
+      inputMode: 'image',
+      outputKind: 'segmentation',
+      params: [
+        p('mode', t('输出模式', 'Output mode'), 'select', 'matte', {
+          options: [
+            { value: 'matte', label: t('透明背景', 'Transparent cutout') },
+            { value: 'mask', label: t('掩码叠加', 'Mask overlay') },
+          ],
+        }),
+        p('feather', t('边缘羽化', 'Edge feather'), 'range', 2, { min: 0, max: 8, step: 1 }),
+        p('thresh', t('前景阈值', 'Foreground threshold'), 'range', 0.5, { min: 0.2, max: 0.8, step: 0.02 }),
+      ],
+      samples: [
+        img('portrait', t('人像', 'Portrait'), 'portrait.png', t('单人主体', 'Single subject')),
+        img('hand', t('手部', 'Hand'), 'hand.png'),
+        img('desk', t('桌面物品', 'Desk objects'), 'desk.png'),
+      ],
+    },
+
+    'watermark-removal': {
+      category: 'vision',
+      subcategory: 'watermark-removal',
+      tagline: t('涂抹水印，一键修复', 'Brush over a watermark and repair it'),
+      task: t(
+        '先用笔刷标出水印位置，修补网络只替换选中像素，周边内容自然延续。',
+        'Mark the watermark with the brush; the inpainting network replaces only the painted pixels and continues the surroundings naturally.'
+      ),
+      inputMode: 'image',
+      outputKind: 'inpainting',
+      brush: true,
+      params: [
+        p('brushSize', t('笔刷大小', 'Brush size'), 'range', 36, { min: 8, max: 96, step: 4 }),
+        p('feather', t('边缘融合', 'Feather edges'), 'range', 6, { min: 0, max: 24, step: 2 }),
+        p('method', t('补全方式', 'Fill method'), 'select', 'patch', {
+          options: [
+            { value: 'patch', label: t('上下文补全', 'Context aware') },
+            { value: 'blur', label: t('模糊填充', 'Blur fill') },
+            { value: 'clone', label: t('邻近克隆', 'Clone nearby') },
+          ],
+        }),
+      ],
+      samples: [
+        img('poster', t('带水印海报', 'Watermarked poster'), 'poster.png', t('右下角有明显水印', 'Visible watermark bottom-right')),
+        img('street', t('街景', 'Street scene'), 'street.png'),
+      ],
+    },
+
+    'object-removal': {
+      category: 'vision',
+      subcategory: 'object-removal',
+      tagline: t('涂抹擦除多余物体', 'Paint over clutter to erase it'),
+      task: t(
+        '涂抹要删掉的对象，模型根据周围环境重建被遮挡的背景，画面其余部分保持原样。',
+        'Paint the object you want gone; the model rebuilds the occluded background from its surroundings while the rest of the frame stays untouched.'
+      ),
+      inputMode: 'image',
+      outputKind: 'inpainting',
+      brush: true,
+      params: [
+        p('brushSize', t('笔刷大小', 'Brush size'), 'range', 36, { min: 8, max: 96, step: 4 }),
+        p('feather', t('边缘融合', 'Feather edges'), 'range', 6, { min: 0, max: 24, step: 2 }),
+        p('method', t('补全方式', 'Fill method'), 'select', 'patch', {
+          options: [
+            { value: 'patch', label: t('上下文补全', 'Context aware') },
+            { value: 'blur', label: t('模糊填充', 'Blur fill') },
+            { value: 'clone', label: t('邻近克隆', 'Clone nearby') },
+          ],
+        }),
+      ],
+      samples: [
+        img('desk', t('桌面物品', 'Desk objects'), 'desk.png', t('擦除其中一件物品试试', 'Try erasing one of the objects')),
+        img('street', t('街景杂物', 'Street clutter'), 'street.png'),
+      ],
+    },
+
     ocr: {
       category: 'vision',
       subcategory: 'ocr',
@@ -643,6 +726,58 @@ export const DEMOS: Record<string, Record<string, DemoSpec>> = {
       samples: [
         img('noisy', t('噪点街景', 'Noisy street'), 'street-noisy.png', t('高斯噪声 + 轻微模糊', 'Gaussian noise plus slight blur'), 'street.png'),
         img('lowres', t('低分辨率', 'Low resolution'), 'street-lowres.png', t('三分之一分辨率放大', 'Upscaled from one third resolution'), 'street.png'),
+        img('pnoisy', t('噪点人像', 'Noisy portrait'), 'portrait-noisy.png', t('人物肤色区域噪声', 'Noise across skin tones'), 'portrait.png'),
+      ],
+    },
+    'super-resolution': {
+      category: 'vision',
+      subcategory: 'super-resolution',
+      tagline: t('把小图放大成大图', 'Turn a small image into a large one'),
+      task: t(
+        '超分网络逐块重建高频细节，把低分辨率输入放大 2–4 倍，比插值更锐利。',
+        'A super-resolution network rebuilds high-frequency detail tile by tile, upscaling low-resolution input 2–4x — far sharper than interpolation.'
+      ),
+      inputMode: 'image',
+      outputKind: 'restoration',
+      params: [
+        p('task', t('恢复任务', 'Task'), 'select', 'sr', {
+          options: [
+            { value: 'sr', label: t('超分辨率 2×', 'Super-resolution 2×') },
+            { value: 'denoise', label: t('去噪', 'Denoise') },
+            { value: 'deblur', label: t('去模糊 / 锐化', 'Deblur / sharpen') },
+          ],
+        }),
+        p('strength', t('强度', 'Strength'), 'range', 0.7, { min: 0, max: 1, step: 0.05 }),
+        p('compare', t('对比原图', 'Show reference'), 'toggle', true),
+      ],
+      samples: [
+        img('lowres', t('低分辨率街景', 'Low-resolution street'), 'street-lowres.png', t('三分之一分辨率放大', 'Upscaled from one third resolution'), 'street.png'),
+        img('noisy', t('噪点街景', 'Noisy street'), 'street-noisy.png', t('高斯噪声 + 轻微模糊', 'Gaussian noise plus slight blur'), 'street.png'),
+      ],
+    },
+    'image-enhancement': {
+      category: 'vision',
+      subcategory: 'image-enhancement',
+      tagline: t('让模糊照片恢复清晰', 'Bring soft photos back into focus'),
+      task: t(
+        '增强网络一次完成去噪、去模糊与细节重建，在原尺寸上恢复画质。',
+        'An enhancement network denoises, deblurs and rebuilds detail in a single pass at the original size.'
+      ),
+      inputMode: 'image',
+      outputKind: 'restoration',
+      params: [
+        p('task', t('恢复任务', 'Task'), 'select', 'denoise', {
+          options: [
+            { value: 'denoise', label: t('去噪', 'Denoise') },
+            { value: 'deblur', label: t('去模糊 / 锐化', 'Deblur / sharpen') },
+            { value: 'sr', label: t('超分辨率 2×', 'Super-resolution 2×') },
+          ],
+        }),
+        p('strength', t('强度', 'Strength'), 'range', 0.7, { min: 0, max: 1, step: 0.05 }),
+        p('compare', t('对比原图', 'Show reference'), 'toggle', true),
+      ],
+      samples: [
+        img('noisy', t('噪点街景', 'Noisy street'), 'street-noisy.png', t('高斯噪声 + 轻微模糊', 'Gaussian noise plus slight blur'), 'street.png'),
         img('pnoisy', t('噪点人像', 'Noisy portrait'), 'portrait-noisy.png', t('人物肤色区域噪声', 'Noise across skin tones'), 'portrait.png'),
       ],
     },

@@ -259,35 +259,25 @@ export const REAL_MODELS: Record<string, RealModelSpec> = {
     },
   },
 
-  /* ---------------------------------------------------- vision / segmentation */
-  'vision/segmentation/imgly-bg-removal': {
+  /* ----------------------------------------------- vision / bg removal */
+  'vision/background-removal/imgly-bg-removal': {
     repo: 'briaai/RMBG-1.4',
     task: 'background-removal',
     dtype: 'q8',
     substitute: true,
     note: {
-      zh: '真实权重：BRIA RMBG-1.4 逐像素预测 alpha，背景由模型真正抠掉。',
-      en: 'Real weights: BRIA RMBG-1.4 predicts a per-pixel alpha — the background is genuinely removed by the model.',
+      zh: '真实权重：BRIA RMBG-1.4 逐像素预测 alpha，背景由模型真正抠掉。IMG.LY 的 IS-Net 权重不在 Hugging Face 上，这里以 RMBG-1.4 替代。',
+      en: 'Real weights: BRIA RMBG-1.4 predicts a per-pixel alpha — the background is genuinely removed by the model. IMG.LY’s IS-Net weights are not on Hugging Face, so RMBG-1.4 stands in.',
     },
   },
-  'vision/segmentation/imgly-bg-removal-balanced': {
-    repo: 'Xenova/modnet',
-    task: 'background-removal',
-    dtype: 'q8',
-    substitute: true,
-    note: {
-      zh: '真实权重：MODNet 人像抠图（约 6 MB），alpha 掩码逐像素由模型给出。',
-      en: 'Real weights: MODNet portrait matting (~6 MB) produces the alpha mask per pixel.',
-    },
-  },
-  'vision/segmentation/imgly-bg-removal-hd': {
+  'vision/background-removal/birefnet-lite-512': {
     repo: 'briaai/RMBG-1.4',
     task: 'background-removal',
     dtype: 'q8',
     substitute: true,
     note: {
-      zh: '真实权重：RMBG-1.4 高清档，边缘细节由模型重建。',
-      en: 'Real weights: RMBG-1.4 in its high-detail configuration; edges are reconstructed by the model.',
+      zh: 'BiRefNet-lite 的 fp16 权重约 94 MB 且要求 WebGPU，这里换用 RMBG-1.4（q8）做真实抠图，效果同为整图 alpha 预测。',
+      en: 'BiRefNet-lite’s fp16 weights are ~94 MB and need WebGPU; RMBG-1.4 (q8) performs the real matting instead — both predict a whole-image alpha.',
     },
   },
   'vision/segmentation/sam-tiny': {
@@ -394,8 +384,8 @@ export const REAL_MODELS: Record<string, RealModelSpec> = {
     },
   },
 
-  /* ----------------------------------------- vision / image restoration */
-  'vision/image-restoration/swinir': {
+  /* ------------------------------------- vision / super resolution + enhancement */
+  'vision/super-resolution/swinir': {
     repo: 'Xenova/swin2sr-classical-sr-x2-64',
     task: 'image-to-image',
     dtype: 'q4',
@@ -405,7 +395,17 @@ export const REAL_MODELS: Record<string, RealModelSpec> = {
       en: 'Real weights: Swin2SR performs 2x super-resolution, standing in for SwinIR. Output pixels are reconstructed by the model.',
     },
   },
-  'vision/image-restoration/real-esrgan': {
+  'vision/super-resolution/esrgan-slim': {
+    repo: 'Xenova/swin2sr-classical-sr-x2-64',
+    task: 'image-to-image',
+    dtype: 'q4',
+    substitute: true,
+    note: {
+      zh: 'UpscalerJS 的 ESRGAN-slim 是 TFJS 格式，Transformers.js 无法加载，这里用 Swin2SR 2× 做真实超分替身。',
+      en: 'UpscalerJS’s ESRGAN-slim ships in TFJS format which Transformers.js cannot load, so Swin2SR 2x performs the real super-resolution instead.',
+    },
+  },
+  'vision/image-enhancement/real-esrgan': {
     repo: 'Xenova/swin2SR-realworld-sr-x4-64-bsrgan-psnr',
     task: 'image-to-image',
     dtype: 'q4',
@@ -447,17 +447,18 @@ export const REAL_MODELS: Record<string, RealModelSpec> = {
       en: 'MediaPipe ships no public video action classifier, so EfficientNet-Lite0 (~18 MB, ImageNet-1k) classifies each sampled frame and adjacent frames with the same label merge into segments.',
     },
   },
-  'generative-vision/inpainting/mi-gan-watermark': {
+  /* ---------------------------------------------- vision / watermark removal */
+  'vision/watermark-removal/mi-gan-watermark': {
     repo: 'https://huggingface.co/anyisalin/migan-onnx/resolve/main/onnx/migan_pipeline.onnx',
     task: 'onnxruntime',
     ort: 'migan',
     dtype: 'uint8',
     note: {
-      zh: '真实权重：MI-GAN 修补网络（28 MB ONNX，onnxruntime-web）。只替换你涂抹的区域，其余像素保持原样。',
-      en: 'Real weights: the MI-GAN inpainting network (28 MB ONNX on onnxruntime-web). Only the area you painted is replaced.',
+      zh: '真实权重：MI-GAN 修补网络（28 MB ONNX，onnxruntime-web）。只替换你涂抹的水印区域，其余像素保持原样。',
+      en: 'Real weights: the MI-GAN inpainting network (28 MB ONNX on onnxruntime-web). Only the watermark area you painted is replaced.',
     },
   },
-  'generative-vision/inpainting/lama-watermark': {
+  'vision/watermark-removal/lama-watermark': {
     repo: 'https://huggingface.co/anyisalin/migan-onnx/resolve/main/onnx/migan_pipeline.onnx',
     task: 'onnxruntime',
     ort: 'migan',
@@ -466,6 +467,16 @@ export const REAL_MODELS: Record<string, RealModelSpec> = {
     note: {
       zh: 'LaMa 的 ONNX 约 208 MB 且无法在 wasm 端建立会话，这里换用同类的 MI-GAN（28 MB）真实修补。',
       en: 'LaMa’s ~208 MB ONNX does not load on the wasm backend, so MI-GAN (28 MB) performs the real inpainting instead.',
+    },
+  },
+  'vision/object-removal/image-object-eraser': {
+    repo: 'https://huggingface.co/anyisalin/migan-onnx/resolve/main/onnx/migan_pipeline.onnx',
+    task: 'onnxruntime',
+    ort: 'migan',
+    dtype: 'uint8',
+    note: {
+      zh: '真实权重：与去水印共用的 MI-GAN 修补网络（28 MB ONNX），蒙版来自你的涂抹笔触，只重建擦除区域。',
+      en: 'Real weights: the same MI-GAN inpainting network the watermark remover uses (28 MB ONNX); the mask comes from your brush strokes and only the erased area is rebuilt.',
     },
   },
   'audio/denoising/rnnoise-wasm': {
@@ -656,7 +667,7 @@ export const REAL_MODELS: Record<string, RealModelSpec> = {
   },
 
   /* ------------------------------------------------------------ llm / chat */
-  'llm/chat/qwen2-1.5b': {
+  'llm/chat/qwen2-1-5b': {
     repo: 'Xenova/Qwen1.5-0.5B-Chat',
     task: 'text-generation',
     dtype: 'q4f16',
@@ -690,7 +701,7 @@ export const REAL_MODELS: Record<string, RealModelSpec> = {
   },
 
   /* ------------------------------------------------------------ llm / code */
-  'llm/code/deepseek-coder-1.3b': {
+  'llm/code/deepseek-coder-1-3b': {
     repo: 'onnx-community/Qwen2.5-Coder-0.5B-Instruct',
     task: 'text-generation',
     dtype: 'q4f16',
@@ -878,7 +889,7 @@ export const REAL_MODELS: Record<string, RealModelSpec> = {
       en: 'Llama-3-8B exceeds ~0.7 GB in the browser, so Qwen2.5-0.5B-Instruct (~460 MB) generates the replies for real.',
     },
   },
-  'llm/chat/tinyllama-1.1b': {
+  'llm/chat/tinyllama-1-1b': {
     repo: 'onnx-community/Qwen2.5-0.5B-Instruct',
     task: 'text-generation',
     dtype: 'q4f16',
@@ -898,7 +909,7 @@ export const REAL_MODELS: Record<string, RealModelSpec> = {
       en: 'Gemma-2-2B exceeds ~0.7 GB in the browser, so Qwen2.5-0.5B-Instruct (~460 MB) generates the replies for real.',
     },
   },
-  'llm/chat/smollm2-1.7b': {
+  'llm/chat/smollm2-1-7b': {
     repo: 'onnx-community/Qwen2.5-0.5B-Instruct',
     task: 'text-generation',
     dtype: 'q4f16',
@@ -908,7 +919,7 @@ export const REAL_MODELS: Record<string, RealModelSpec> = {
       en: 'SmolLM2-1.7B exceeds ~0.7 GB in the browser, so Qwen2.5-0.5B-Instruct (~460 MB) generates the replies for real.',
     },
   },
-  'llm/chat/deepseek-r1-distill-qwen-1.5b': {
+  'llm/chat/deepseek-r1-distill-qwen-1-5b': {
     repo: 'onnx-community/Qwen2.5-0.5B-Instruct',
     task: 'text-generation',
     dtype: 'q4f16',
@@ -916,16 +927,6 @@ export const REAL_MODELS: Record<string, RealModelSpec> = {
     note: {
       zh: 'DeepSeek-R1-Distill-1.5B 的浏览器权重超过 0.7 GB，改用 Qwen2.5-0.5B-Instruct（约 460 MB）做真实多轮生成。',
       en: 'DeepSeek-R1-Distill-1.5B exceeds ~0.7 GB in the browser, so Qwen2.5-0.5B-Instruct (~460 MB) generates the replies for real.',
-    },
-  },
-  'llm/structured-output/instructor-xl': {
-    repo: 'onnx-community/Qwen2.5-0.5B-Instruct',
-    task: 'text-generation',
-    dtype: 'q4f16',
-    substitute: true,
-    note: {
-      zh: 'Instructor-XL 体积过大，改用 Qwen2.5-0.5B-Instruct 按 Schema 提示真实生成 JSON，合法性由前端再校验。',
-      en: 'Instructor-XL is too large for the browser, so Qwen2.5-0.5B-Instruct generates JSON from the schema prompt for real; the front end still validates it.',
     },
   },
   'llm/structured-output/outline-llama': {
@@ -958,7 +959,7 @@ export const REAL_MODELS: Record<string, RealModelSpec> = {
       en: 'StarCoder2-3B is too large for the browser, so Qwen2.5-Coder-0.5B-Instruct (~530 MB) generates the code for real.',
     },
   },
-  'multimodal/vlm/llava-1.5-7b': {
+  'multimodal/vlm/llava-1-5-7b': {
     repo: 'Xenova/vit-gpt2-image-captioning',
     task: 'image-to-text',
     dtype: 'q8',
