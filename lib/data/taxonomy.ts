@@ -269,6 +269,11 @@ export const TAXONOMY: TaxonomyEntry[] = [
         name: { zh: '视频理解', en: 'Video Understanding' },
         blurb: { zh: '分段标注与内容摘要', en: 'Segment labelling and content summary' },
       },
+      {
+        slug: 'video-watermark-removal',
+        name: { zh: '视频去水印', en: 'Video Watermark Removal' },
+        blurb: { zh: '框选水印区域，时域重建或 AI 补全', en: 'Box the watermark; temporal or AI repair' },
+      },
     ],
   },
 ];

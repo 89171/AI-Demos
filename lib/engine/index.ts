@@ -65,6 +65,7 @@ import { tesseractOcr } from './tesseract';
 import { rnnoiseDenoise } from './rnnoise';
 import { miganInpaint } from './migan';
 import { separateReal } from './stems';
+import { removeVideoWatermark, type VideoRepairMethod } from './video-watermark';
 import {
   askDocument,
   captionImage,
@@ -108,6 +109,8 @@ export interface RunContext {
   sampleId?: string;
   /** Foreground mask painted by the user (inpainting). Same resolution as the analysis canvas. */
   maskAlpha?: Float32Array;
+  /** Watermark selection rectangle in normalised video coordinates (video-inpainting). */
+  videoRect?: { x: number; y: number; w: number; h: number };
   onToken?: (partial: string) => void;
   onPhase?: (phase: string) => void;
 }
@@ -154,7 +157,8 @@ export type DemoPayload =
   | { kind: 'music'; url: string; peaks: number[]; plan: { kind: string; tempo: number; duration: number; chords: number[][]; waveform: string } }
   | { kind: 'landmarks'; variant: 'face' | 'pose' | 'hand'; set: LandmarkSet; imageUrl: string; width: number; height: number; gesture?: string }
   | { kind: 'tracking'; duration: number; frames: { t: number; boxes: { id: number; label: string; x: number; y: number; w: number; h: number; score: number }[] }[]; trackCount: number; videoUrl: string }
-  | { kind: 'video-timeline'; duration: number; segments: { start: number; end: number; label: string; confidence: number }[]; summary: string; thumbs: string[]; videoUrl: string };
+  | { kind: 'video-timeline'; duration: number; segments: { start: number; end: number; label: string; confidence: number }[]; summary: string; thumbs: string[]; videoUrl: string }
+  | { kind: 'video-inpainting'; url: string; originalUrl: string; filename: string; method: 'temporal' | 'ai'; hasAudio: boolean; outputSize: number; width: number; height: number; fallback?: boolean };
 
 export interface RunResult {
   payload: DemoPayload;
@@ -686,6 +690,46 @@ async function runVideoFamily(ctx: RunContext, kind: OutputKind): Promise<DemoPa
   const video = await loadVideo(src);
   const duration = Number.isFinite(video.duration) && video.duration > 0 ? video.duration : 6;
 
+  if (kind === 'video-inpainting') {
+    // Demo path: temporal-median patch only — the real MI-GAN weights live in tryReal.
+    const rect = ctx.videoRect;
+    if (!rect) {
+      throw new Error(locale === 'zh' ? '请先在视频上框选水印区域' : 'Drag a rectangle over the watermark first');
+    }
+    const res = await removeVideoWatermark({
+      src,
+      rect,
+      method: str(params.method, 'auto') as VideoRepairMethod,
+      useMigan: false,
+      locale,
+      onPhase: ctx.onPhase,
+    });
+    if (!res.ok) {
+      const messages: Record<string, { zh: string; en: string }> = {
+        selection_required: { zh: '请先在视频上框选水印区域', en: 'Drag a rectangle over the watermark first' },
+        unsupported_browser: { zh: '当前浏览器不支持 WebCodecs 视频编码', en: 'This browser does not support WebCodecs video encoding' },
+        video_too_long: { zh: '视频超过 120 秒，请换一段短一些的', en: 'The video exceeds 120 seconds — try a shorter clip' },
+        video_load_failed: { zh: '视频解码失败', en: 'Video decoding failed' },
+        encode_failed: { zh: '视频重编码失败', en: 'Video re-encoding failed' },
+        canvas_context: { zh: '无法创建画布上下文', en: 'Canvas context unavailable' },
+        general: { zh: '处理失败', en: 'Processing failed' },
+      };
+      throw new Error(messages[res.code]?.[locale] ?? res.detail ?? 'video watermark removal failed');
+    }
+    return {
+      kind: 'video-inpainting',
+      url: res.url,
+      originalUrl: src,
+      filename: res.filename,
+      method: res.method,
+      hasAudio: res.hasAudio,
+      outputSize: res.outputSize,
+      width: res.width,
+      height: res.height,
+      fallback: res.fallback,
+    };
+  }
+
   if (kind === 'tracking') {
     const fps = 3;
     const probe = document.createElement('canvas');
@@ -912,7 +956,7 @@ async function runDispatch(kind: OutputKind, ctx: RunContext): Promise<DemoPaylo
     const buffer = await decodeAudio(ctx.media!.src);
     ctx.onPhase?.(ctx.locale === 'zh' ? '频谱处理…' : 'Spectral processing…');
     payload = await Promise.resolve(runAudioFamily(ctx, buffer, kind));
-  } else if (kind === 'tracking' || kind === 'video-timeline') {
+  } else if (kind === 'tracking' || kind === 'video-timeline' || kind === 'video-inpainting') {
     ctx.onPhase?.(ctx.locale === 'zh' ? '抽帧与解码…' : 'Sampling frames…');
     payload = await runVideoFamily(ctx, kind);
   } else if (textFamily.includes(kind)) {
@@ -1521,6 +1565,39 @@ async function tryReal(ctx: RunContext): Promise<{ payload: DemoPayload; run: Lo
         );
         return { payload: { kind: 'stems', stems }, run: { call: async () => null, repo: spec.repo, dtype: spec.dtype, device: 'wasm', bytes: 0 } };
       }
+      case 'video-inpainting': {
+        // Only engage the weights when the requested method can use them; the
+        // explicit "temporal" choice (and the temporal half of "auto") needs no
+        // download, so it runs through the demo pipeline instead.
+        const method = str(ctx.params.method, 'auto') as VideoRepairMethod;
+        if (method === 'temporal') return null;
+        if (!ctx.media?.src || spec.ort !== 'migan' || !ctx.videoRect) return null;
+        const res = await removeVideoWatermark({
+          src: ctx.media.src,
+          rect: ctx.videoRect,
+          method,
+          useMigan: true,
+          miganRepo: spec.repo,
+          locale: ctx.locale,
+          onPhase: ctx.onPhase,
+        });
+        if (!res.ok) return null;
+        return {
+          payload: {
+            kind: 'video-inpainting',
+            url: res.url,
+            originalUrl: ctx.media.src,
+            filename: res.filename,
+            method: res.method,
+            hasAudio: res.hasAudio,
+            outputSize: res.outputSize,
+            width: res.width,
+            height: res.height,
+            fallback: res.fallback,
+          },
+          run: { call: async () => null, repo: spec.repo, dtype: spec.dtype, device: 'wasm', bytes: 0 },
+        };
+      }
       case 'inpainting': {
         if (!ctx.media?.src || spec.ort !== 'migan') return null;
         const img = await loadImage(ctx.media.src);
@@ -1637,6 +1714,7 @@ const REAL_SIGNAL_KINDS = new Set<string>([
   'inpainting',
   'generated-image',
   'tracking',
+  'video-inpainting',
   'music',
   'audio-compare',
   'stems',

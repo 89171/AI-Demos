@@ -1054,6 +1054,16 @@ export const REAL_MODELS: Record<string, RealModelSpec> = {
       en: 'VideoMAE is too large and has no video pipeline here, so EfficientNet-Lite0 (~18 MB) classifies each sampled frame and adjacent frames with the same label merge into segments.',
     },
   },
+  'video/video-watermark-removal/video-watermark-repair': {
+    repo: 'https://huggingface.co/anyisalin/migan-onnx/resolve/main/onnx/migan_pipeline.onnx',
+    task: 'onnxruntime',
+    ort: 'migan',
+    dtype: 'uint8',
+    note: {
+      zh: '真实权重：选区时域采样判定背景是否静止，静止时用 MI-GAN（28 MB ONNX）单帧补全补丁，WebCodecs 重编码并用 ffmpeg.wasm 回填原音轨。',
+      en: 'Real weights: the selection is sampled over time; a static background gets a MI-GAN (28 MB ONNX) single-frame patch, then WebCodecs re-encodes the frames and ffmpeg.wasm muxes the original audio back.',
+    },
+  },
 
   'text/token-classification/bert-base-ner': {
     repo: 'Xenova/bert-base-NER',

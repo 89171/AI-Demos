@@ -1312,6 +1312,30 @@ export const DEMOS: Record<string, Record<string, DemoSpec>> = {
         vid('street', t('街景片段', 'Street clip'), 'street.mp4', t('8 秒，行人车辆横向运动', '8 seconds, pedestrian and vehicle moving across frame')),
       ],
     },
+
+    'video-watermark-removal': {
+      category: 'video',
+      subcategory: 'video-watermark-removal',
+      tagline: t('框选水印，逐帧重建', 'Box the watermark, rebuild every frame'),
+      task: t(
+        '对水印选区做时域采样：背景在动就用时域中值直接重建干净背景；背景静止就用 MI-GAN 对代表帧做 AI 补全，再把补丁贴回每一帧，经 WebCodecs 重编码为 MP4，真实权重模式下还会用 ffmpeg.wasm 把原音轨接回来。',
+        'The watermark selection is sampled over time: a moving background is rebuilt directly by a temporal median, a static one is filled by MI-GAN on a representative frame. The patch is composited onto every frame, re-encoded with WebCodecs, and the original audio is muxed back with ffmpeg.wasm in real-weights mode.'
+      ),
+      inputMode: 'video',
+      outputKind: 'video-inpainting',
+      params: [
+        p('method', t('修复方式', 'Repair method'), 'select', 'auto', {
+          options: [
+            { value: 'auto', label: t('自动判定', 'Auto') },
+            { value: 'temporal', label: t('时域中值', 'Temporal median') },
+            { value: 'ai', label: t('AI 单帧补全', 'AI single-frame fill') },
+          ],
+        }),
+      ],
+      samples: [
+        vid('street', t('街景片段', 'Street clip'), 'street.mp4', t('先在画面上框选要去除的区域', 'Drag a rectangle over the area to remove first')),
+      ],
+    },
   },
 };
 

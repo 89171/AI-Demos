@@ -115,7 +115,8 @@ export type OutputKind =
   | 'landmarks-pose'
   | 'landmarks-hand'
   | 'tracking'
-  | 'video-timeline';
+  | 'video-timeline'
+  | 'video-inpainting';
 
 export interface DemoSpec {
   category: string;

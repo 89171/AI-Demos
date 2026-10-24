@@ -510,14 +510,26 @@ export function AudioPanel({
 
 /* ------------------------------------------------------------------- video */
 
+export interface VideoRect {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
 export function VideoPanel({
   media,
   onMedia,
   webcam,
+  selection,
+  onSelection,
 }: {
   media?: MediaState;
   onMedia: (m: MediaState | undefined) => void;
   webcam?: boolean;
+  /** render a draggable selection rectangle over the video (video-inpainting) */
+  selection?: VideoRect | null;
+  onSelection?: (rect: VideoRect | null) => void;
 }) {
   const { locale, tr } = useApp();
   const fileRef = useRef<HTMLInputElement | null>(null);
@@ -525,6 +537,9 @@ export function VideoPanel({
   const streamRef = useRef<MediaStream | null>(null);
   const [camera, setCamera] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [aspect, setAspect] = useState(16 / 9);
+  const dragRef = useRef<{ startX: number; startY: number } | null>(null);
+  const [dragRect, setDragRect] = useState<VideoRect | null>(null);
 
   const stopCamera = () => {
     streamRef.current?.getTracks().forEach((t) => t.stop());
@@ -565,11 +580,95 @@ export function VideoPanel({
 
   useEffect(() => () => stopCamera(), []);
 
+  /* ---- rectangle selection (video-inpainting) ---- */
+  const selectEnabled = Boolean(onSelection);
+
+  const pointToNorm = (e: React.PointerEvent): { x: number; y: number } => {
+    const box = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    return {
+      x: Math.min(1, Math.max(0, (e.clientX - box.left) / box.width)),
+      y: Math.min(1, Math.max(0, (e.clientY - box.top) / box.height)),
+    };
+  };
+
+  const onPointerDown = (e: React.PointerEvent) => {
+    if (!selectEnabled || camera) return;
+    e.currentTarget.setPointerCapture(e.pointerId);
+    const p = pointToNorm(e);
+    dragRef.current = { startX: p.x, startY: p.y };
+    setDragRect({ x: p.x, y: p.y, w: 0, h: 0 });
+  };
+
+  const onPointerMove = (e: React.PointerEvent) => {
+    if (!dragRef.current) return;
+    const p = pointToNorm(e);
+    const { startX, startY } = dragRef.current;
+    setDragRect({
+      x: Math.min(startX, p.x),
+      y: Math.min(startY, p.y),
+      w: Math.abs(p.x - startX),
+      h: Math.abs(p.y - startY),
+    });
+  };
+
+  const commitSelection = () => {
+    const rect = dragRect;
+    dragRef.current = null;
+    setDragRect(null);
+    if (rect && rect.w > 0.01 && rect.h > 0.01) onSelection?.(rect);
+  };
+
+  const shownRect = dragRect ?? selection ?? null;
+
   return (
     <div className="space-y-3">
-      <div className="overflow-hidden rounded-lg border" style={{ background: '#000' }}>
-        <video ref={videoRef} controls muted playsInline className="block w-full" style={{ aspectRatio: '16 / 9' }} />
+      <div
+        className="relative select-none overflow-hidden rounded-lg border"
+        style={{ background: '#000', aspectRatio: String(aspect), cursor: selectEnabled && !camera ? 'crosshair' : undefined }}
+        onPointerDown={selectEnabled ? onPointerDown : undefined}
+        onPointerMove={selectEnabled ? onPointerMove : undefined}
+        onPointerUp={selectEnabled ? commitSelection : undefined}
+        onPointerCancel={selectEnabled ? commitSelection : undefined}
+      >
+        <video
+          ref={videoRef}
+          controls={!selectEnabled}
+          muted
+          playsInline
+          className="pointer-events-none block h-full w-full"
+          onLoadedMetadata={(e) => {
+            const v = e.target as HTMLVideoElement;
+            if (v.videoWidth && v.videoHeight) setAspect(v.videoWidth / v.videoHeight);
+          }}
+        />
+        {selectEnabled && shownRect && (
+          <div
+            className="pointer-events-none absolute border-2"
+            style={{
+              left: `${shownRect.x * 100}%`,
+              top: `${shownRect.y * 100}%`,
+              width: `${shownRect.w * 100}%`,
+              height: `${shownRect.h * 100}%`,
+              borderColor: '#fff',
+              boxShadow: '0 0 0 1px rgba(0,0,0,.55), inset 0 0 0 40px rgba(255,255,255,.12)',
+            }}
+          />
+        )}
       </div>
+      {selectEnabled && (
+        <div className="flex flex-wrap items-center gap-2">
+          <p className="text-[11px]" style={{ color: 'var(--fg-faint)' }}>
+            {locale === 'zh'
+              ? '在画面上按住鼠标拖出要去除的水印区域；再次拖动可重新框选。'
+              : 'Drag on the frame to box the watermark; drag again to reselect.'}
+          </p>
+          {selection && (
+            <button type="button" className="btn btn-ghost !px-2 !text-[11px]" onClick={() => onSelection?.(null)}>
+              {locale === 'zh' ? '清除选区' : 'Clear selection'}
+            </button>
+          )}
+        </div>
+      )}
       <div className="flex flex-wrap items-center gap-2">
         <input
           ref={fileRef}

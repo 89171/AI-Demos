@@ -1443,6 +1443,19 @@
         "description": "On-device video action classification via the MediaPipe Tasks API.",
         "docsUrl": "https://developers.google.com/edge/mediapipe/solutions/vision/image_classifier/web_js"
       }
+    ],
+    "video-watermark-removal": [
+      {
+        "id": "video-watermark-repair",
+        "name": "Video watermark removal (MI-GAN / LaMa)",
+        "framework": "onnxruntime-web",
+        "size": "—",
+        "license": "—",
+        "languages": [],
+        "description": "Samples a representative frame, inpaints the watermark patch with MI-GAN — or LaMa in HD mode, or a temporal median when the background moves — then re-encodes the repaired frames with WebCodecs and muxes the original audio back with ffmpeg.wasm.",
+        "demoUrl": "https://toolgarden.xyz/video/remove-watermark",
+        "docsUrl": "https://github.com/Picsart-AI-Research/MI-GAN"
+      }
     ]
   }
 }

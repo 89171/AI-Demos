@@ -241,6 +241,8 @@ function Body({ payload }: { payload: DemoPayload }) {
       return <TrackingView p={p} />;
     case 'video-timeline':
       return <VideoTimelineView p={p} />;
+    case 'video-inpainting':
+      return <VideoInpaintingView p={p} />;
     default:
       return null;
   }
@@ -1236,6 +1238,64 @@ function VideoTimelineView({ p }: { p: Extract<DemoPayload, { kind: 'video-timel
         <Stat label={tr('duration')} value={`${p.duration.toFixed(1)}s`} />
         <Stat label={tr('segments')} value={p.segments.length} />
       </div>
+    </div>
+  );
+}
+
+/* ------------------------------------------------------ video inpainting */
+
+function VideoInpaintingView({ p }: { p: Extract<DemoPayload, { kind: 'video-inpainting' }> }) {
+  const { locale } = useApp();
+  const methodLabel =
+    p.method === 'temporal'
+      ? locale === 'zh'
+        ? '时域中值重建'
+        : 'Temporal median rebuild'
+      : 'MI-GAN';
+  return (
+    <div className="space-y-3">
+      <div>
+        <div className="mb-1.5 text-[10px]" style={{ color: 'var(--fg-faint)' }}>
+          {locale === 'zh' ? '去水印结果' : 'Watermark removed'}
+        </div>
+        <div className="overflow-hidden rounded-lg border" style={{ background: '#000' }}>
+          <video src={p.url} controls muted playsInline className="block w-full" />
+        </div>
+      </div>
+      <div>
+        <div className="mb-1.5 text-[10px]" style={{ color: 'var(--fg-faint)' }}>
+          {locale === 'zh' ? '原视频' : 'Original'}
+        </div>
+        <div className="overflow-hidden rounded-lg border" style={{ background: '#000', opacity: 0.75 }}>
+          <video src={p.originalUrl} controls muted playsInline className="block w-full" />
+        </div>
+      </div>
+      {p.fallback && (
+        <p className="text-[11px] leading-5" style={{ color: 'var(--fg-faint)' }}>
+          {locale === 'zh'
+            ? '选区背景随时间变化，时域中值即可重建，未动用 AI 补全。'
+            : 'The selection background moves over time, so the temporal median rebuilt it without invoking AI fill.'}
+        </p>
+      )}
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+        <Stat label={locale === 'zh' ? '修复方式' : 'Method'} value={methodLabel} />
+        <Stat label={locale === 'zh' ? '音轨' : 'Audio'} value={p.hasAudio ? (locale === 'zh' ? '已回填' : 'muxed') : locale === 'zh' ? '无声' : 'silent'} />
+        <Stat label={locale === 'zh' ? '分辨率' : 'Resolution'} value={`${p.width}×${p.height}`} />
+        <Stat
+          label={locale === 'zh' ? '输出大小' : 'Output size'}
+          value={p.outputSize >= 1048576 ? `${(p.outputSize / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(p.outputSize / 1024))} KB`}
+        />
+      </div>
+      <a className="btn w-full" href={p.url} download={p.filename}>
+        ↓ {locale === 'zh' ? '下载去水印视频' : 'Download the result'}
+      </a>
+      {!p.hasAudio && (
+        <p className="text-[10px] leading-4" style={{ color: 'var(--fg-faint)' }}>
+          {locale === 'zh'
+            ? '演示模式不加载 ffmpeg.wasm，输出为无声视频；切换到带权重标记的模型即自动回填原音轨。'
+            : 'Demo mode skips ffmpeg.wasm, so the output is silent. Switch to the weights-badged model to mux the original audio back.'}
+        </p>
+      )}
     </div>
   );
 }

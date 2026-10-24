@@ -31,8 +31,9 @@ function sizeOf(m) {
 // Upstream subcategories the playground cannot host yet:
 // - text/ner: same task as text/token-classification, which AI-Demos already ships.
 // - audio/vad: needs a speech-timeline output kind the playground lacks.
-// - video/video-watermark-removal: needs decoded-video output (WebCodecs pipeline).
-const SKIP = new Set(['text/ner', 'audio/vad', 'video/video-watermark-removal']);
+// (video/video-watermark-removal used to be skipped; it now runs on the
+//  temporal-median + WebCodecs pipeline in lib/engine/video-watermark.ts.)
+const SKIP = new Set(['text/ner', 'audio/vad']);
 
 const slim = {};
 for (const [cat, subs] of Object.entries(MODELS)) {

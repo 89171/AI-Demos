@@ -10,7 +10,7 @@ import { computesRealSignal } from '@/lib/engine';
 import { getDemo } from '@/lib/data/registry';
 import type { DemoSpec, InputState, Locale } from '@/lib/types';
 import { runInference, type RunResult } from '@/lib/engine';
-import { AudioPanel, ImagePanel, LinesEditor, SampleBar, TextField, VideoPanel, sampleToInput } from './InputPanel';
+import { AudioPanel, ImagePanel, LinesEditor, SampleBar, TextField, VideoPanel, sampleToInput, type VideoRect } from './InputPanel';
 import { ParamBar } from './ParamBar';
 import { ResultView } from './results';
 import { LiveOverlay } from './LiveOverlay';
@@ -48,6 +48,22 @@ export function DemoPlayground({ category, subcategory }: { category: string; su
   const [maskKey, setMaskKey] = useState(0);
   const maskRef = useRef<{ alpha: Float32Array; w: number; h: number } | null>(null);
   const dirty = useRef(false);
+  // video-inpainting: normalised watermark selection kept in a ref so dragging
+  // does not re-render the whole playground; mirrored in state for the overlay.
+  const DEFAULT_VIDEO_RECT: VideoRect = { x: 0.6, y: 0.68, w: 0.34, h: 0.2 };
+  const needsVideoRect = spec?.outputKind === 'video-inpainting';
+  const rectRef = useRef<VideoRect | null>(null);
+  const [selRect, setSelRect] = useState<VideoRect | null>(null);
+  useEffect(() => {
+    if (needsVideoRect) {
+      rectRef.current = DEFAULT_VIDEO_RECT;
+      setSelRect(DEFAULT_VIDEO_RECT);
+    } else {
+      rectRef.current = null;
+      setSelRect(null);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [needsVideoRect]);
 
   const model = models.find((m) => m.id === modelId) ?? models[0];
 
@@ -125,6 +141,7 @@ export function DemoPlayground({ category, subcategory }: { category: string; su
               }
             : undefined,
           maskAlpha: maskRef.current?.alpha,
+          videoRect: rectRef.current ?? undefined,
           onPhase: setPhase,
         });
         setResult(res);
@@ -167,6 +184,7 @@ export function DemoPlayground({ category, subcategory }: { category: string; su
                 }
               : undefined,
             maskAlpha: maskRef.current?.alpha,
+            videoRect: rectRef.current ?? undefined,
             onPhase: setPhase,
           });
           setResult(res);
@@ -424,7 +442,20 @@ export function DemoPlayground({ category, subcategory }: { category: string; su
             )}
 
             {needsVideo && (
-              <VideoPanel media={input.media} onMedia={(m) => update({ media: m })} />
+              <VideoPanel
+                media={input.media}
+                onMedia={(m) => update({ media: m })}
+                selection={needsVideoRect ? selRect : undefined}
+                onSelection={
+                  needsVideoRect
+                    ? (rect) => {
+                        rectRef.current = rect;
+                        setSelRect(rect);
+                        dirty.current = true;
+                      }
+                    : undefined
+                }
+              />
             )}
 
             <div className="border-t pt-4">
