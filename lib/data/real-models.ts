@@ -50,7 +50,7 @@ export interface RealModelSpec {
     | 'image-feature-extraction'
     | 'document-question-answering';
   /** Custom ONNX graph to run when `task` is 'onnxruntime' (`repo` is then the model URL). */
-  ort?: 'migan' | 'demucs';
+  ort?: 'migan' | 'demucs' | 'lama';
   /** Demucs variant (4 or 6 stems). */
   stems?: '4' | '6';
   /** MediaPipe task to run when `task` is 'mediapipe' (`repo` is then the model URL). */
@@ -1062,6 +1062,16 @@ export const REAL_MODELS: Record<string, RealModelSpec> = {
     note: {
       zh: '真实权重：选区时域采样判定背景是否静止，静止时用 MI-GAN（28 MB ONNX）单帧补全补丁，WebCodecs 重编码并用 ffmpeg.wasm 回填原音轨。',
       en: 'Real weights: the selection is sampled over time; a static background gets a MI-GAN (28 MB ONNX) single-frame patch, then WebCodecs re-encodes the frames and ffmpeg.wasm muxes the original audio back.',
+    },
+  },
+  'video/video-watermark-removal/video-watermark-repair-hq': {
+    repo: 'https://huggingface.co/Carve/LaMa-ONNX/resolve/main/lama_fp32.onnx',
+    task: 'onnxruntime',
+    ort: 'lama',
+    dtype: 'fp32',
+    note: {
+      zh: '真实权重：高清档用 big-lama fp32（约 198 MB）对代表帧做单帧补全，大水印与结构重建明显优于 MI-GAN，但推理慢约 7 倍，且仅支持 WASM 执行（LaMa 在 WebGPU 下会死锁），首次运行需耐心等待下载与推理。',
+      en: 'Real weights: the HD pass fills the representative frame with big-lama fp32 (~198 MB) — clearly stronger than MI-GAN on large watermarks and structure, but ~7x slower and WASM-only (LaMa deadlocks on WebGPU). Expect a long first download and inference.',
     },
   },
 

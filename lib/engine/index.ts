@@ -158,7 +158,7 @@ export type DemoPayload =
   | { kind: 'landmarks'; variant: 'face' | 'pose' | 'hand'; set: LandmarkSet; imageUrl: string; width: number; height: number; gesture?: string }
   | { kind: 'tracking'; duration: number; frames: { t: number; boxes: { id: number; label: string; x: number; y: number; w: number; h: number; score: number }[] }[]; trackCount: number; videoUrl: string }
   | { kind: 'video-timeline'; duration: number; segments: { start: number; end: number; label: string; confidence: number }[]; summary: string; thumbs: string[]; videoUrl: string }
-  | { kind: 'video-inpainting'; url: string; originalUrl: string; filename: string; method: 'temporal' | 'ai'; hasAudio: boolean; outputSize: number; width: number; height: number; fallback?: boolean };
+  | { kind: 'video-inpainting'; url: string; originalUrl: string; filename: string; method: 'temporal' | 'ai' | 'hq'; hasAudio: boolean; outputSize: number; width: number; height: number; fallback?: boolean };
 
 export interface RunResult {
   payload: DemoPayload;
@@ -1568,16 +1568,22 @@ async function tryReal(ctx: RunContext): Promise<{ payload: DemoPayload; run: Lo
       case 'video-inpainting': {
         // Only engage the weights when the requested method can use them; the
         // explicit "temporal" choice (and the temporal half of "auto") needs no
-        // download, so it runs through the demo pipeline instead.
+        // download, so it runs through the demo pipeline instead. 'hq' is the
+        // explicit LaMa opt-in and needs the 'lama' spec; on the MI-GAN spec it
+        // falls back to MI-GAN inside the engine.
         const method = str(ctx.params.method, 'auto') as VideoRepairMethod;
         if (method === 'temporal') return null;
-        if (!ctx.media?.src || spec.ort !== 'migan' || !ctx.videoRect) return null;
+        if (!ctx.media?.src || !ctx.videoRect) return null;
+        const isLama = spec.ort === 'lama';
+        if (isLama && method !== 'hq') return null;
+        if (spec.ort !== 'migan' && spec.ort !== 'lama') return null;
         const res = await removeVideoWatermark({
           src: ctx.media.src,
           rect: ctx.videoRect,
           method,
-          useMigan: true,
-          miganRepo: spec.repo,
+          useMigan: !isLama,
+          miganRepo: isLama ? undefined : spec.repo,
+          lamaRepo: isLama ? spec.repo : undefined,
           locale: ctx.locale,
           onPhase: ctx.onPhase,
         });

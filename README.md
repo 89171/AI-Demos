@@ -1,6 +1,6 @@
 # AI Demos
 
-浏览器端 AI 模型交互演示集。10 个分类、41 个子类、123 个模型，其中 38 个子类有独立的演示页。
+浏览器端 AI 模型交互演示集。10 个分类、41 个子类、124 个模型，其中 38 个子类有独立的演示页。
 
 ## 快速开始
 
@@ -53,7 +53,7 @@ lib/
   client-context.tsx                         locale / theme 上下文
   data/
     taxonomy.ts                              分类与子类元数据
-    models.json                             从 WebAIModels 抽取的模型目录（120 个）；extra-models.json 补充上游没有的 10 个
+    models.json                             从 WebAIModels 抽取的模型目录（121 个）；extra-models.json 补充上游没有的 10 个
     models.ts                                模型目录读取与展示标签
     registry.ts                              38 个子类的演示定义（输入类型、示例、参数）
     sample-gt.json                           示例图片的 ground truth 标注
@@ -85,7 +85,7 @@ public/samples/                              示例素材（图片、音频、�
 | 真实计算 | 结果由浏览器内真实算法得出 |
 | 演示模式 | 使用内置参考输出或规则引擎生成 |
 
-**真实权重**：音频降噪用 RNNoise（`@jitsi/rnnoise-wasm`）；音源分离用 HT-Demucs ONNX（Worker 中 onnxruntime-web，参考 json-toolkit 的实现）；图像修补用 MI-GAN ONNX；视频去水印用 MI-GAN 单帧补丁 + WebCodecs 逐帧重编码 + ffmpeg.wasm 回填音轨（`lib/engine/video-watermark.ts`、`lib/engine/ffmpeg-client.ts`）；OCR 的 Tesseract.js 走 `tesseract.js`（WASM 与语言数据首次从 CDN 下载）；视频理解的 MediaPipe 分类器用 EfficientNet-Lite0 对抽样帧分类；实时感知（人脸 / 姿态 / 手势 / 目标追踪）走 `@mediapipe/tasks-vision`（模型来自 storage.googleapis.com/mediapipe-models，WASM 由 `postinstall` 复制到 `public/mediapipe`，摄像头叠加也逐帧真实推理）；其余带「浏览器权重」标记的模型走 Transformers.js，映射表见 `lib/data/real-models.ts`。
+**真实权重**：音频降噪用 RNNoise（`@jitsi/rnnoise-wasm`）；音源分离用 HT-Demucs ONNX（Worker 中 onnxruntime-web，参考 json-toolkit 的实现）；图像修补用 MI-GAN ONNX；视频去水印用 MI-GAN 单帧补丁 + WebCodecs 逐帧重编码 + ffmpeg.wasm 回填音轨，高清档用 LaMa fp32（约 198 MB，仅 WASM，`lib/engine/lama.ts`）（`lib/engine/video-watermark.ts`、`lib/engine/ffmpeg-client.ts`）；OCR 的 Tesseract.js 走 `tesseract.js`（WASM 与语言数据首次从 CDN 下载）；视频理解的 MediaPipe 分类器用 EfficientNet-Lite0 对抽样帧分类；实时感知（人脸 / 姿态 / 手势 / 目标追踪）走 `@mediapipe/tasks-vision`（模型来自 storage.googleapis.com/mediapipe-models，WASM 由 `postinstall` 复制到 `public/mediapipe`，摄像头叠加也逐帧真实推理）；其余带「浏览器权重」标记的模型走 Transformers.js，映射表见 `lib/data/real-models.ts`。
 
 以下任务在浏览器内**真实计算**：
 

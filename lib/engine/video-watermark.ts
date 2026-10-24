@@ -13,6 +13,7 @@
  * the temporal-median patch; the real-weights path enables MI-GAN and audio mux.
  */
 import { miganInpaint } from './migan';
+import { lamaInpaintRegion } from './lama';
 
 export interface VideoRect {
   /** normalised 0..1 coordinates relative to the video frame */
@@ -22,8 +23,8 @@ export interface VideoRect {
   h: number;
 }
 
-export type VideoRepairMethod = 'auto' | 'temporal' | 'ai';
-export type VideoAppliedMethod = 'temporal' | 'ai';
+export type VideoRepairMethod = 'auto' | 'temporal' | 'ai' | 'hq';
+export type VideoAppliedMethod = 'temporal' | 'ai' | 'hq';
 
 export interface VideoWatermarkOptions {
   src: string;
@@ -33,6 +34,8 @@ export interface VideoWatermarkOptions {
   useMigan: boolean;
   /** MI-GAN pipeline ONNX url, required when useMigan is true */
   miganRepo?: string;
+  /** big-lama fp32 ONNX url — enables the explicit 'hq' repair method */
+  lamaRepo?: string;
   locale: 'zh' | 'en';
   onPhase?: (phase: string) => void;
 }
@@ -177,8 +180,11 @@ function computeTemporalMedian(samples: Uint8ClampedArray[]): { median: Uint8Cla
   return { median, motion: Math.min(1, Math.max(0, motion)) };
 }
 
-function decideRepairMethod(method: VideoRepairMethod, motion: number, useMigan: boolean): VideoAppliedMethod {
+function decideRepairMethod(method: VideoRepairMethod, motion: number, useMigan: boolean, useLama: boolean): VideoAppliedMethod {
   if (method === 'temporal') return 'temporal';
+  // hq: LaMa, explicit opt-in only — auto never selects it (matches toolgarden).
+  // Without the LaMa weights it degrades to MI-GAN, then to the temporal patch.
+  if (method === 'hq') return useLama ? 'hq' : useMigan ? 'ai' : 'temporal';
   if (method === 'ai') return useMigan ? 'ai' : 'temporal';
   // auto: a visibly moving background lets the temporal median rebuild it for free
   if (motion >= STATIC_MOTION_THRESHOLD) return 'temporal';
@@ -321,6 +327,49 @@ async function buildMiganPatch(
   return patch;
 }
 
+async function buildLamaPatch(
+  video: HTMLVideoElement,
+  time: number,
+  videoW: number,
+  videoH: number,
+  rectPx: { x: number; y: number; w: number; h: number },
+  feather: number,
+  repo: string,
+  onPhase?: (phase: string) => void,
+  locale?: 'zh' | 'en'
+): Promise<HTMLCanvasElement | null> {
+  await seekTo(video, time);
+  const frame = createCanvas(videoW, videoH);
+  if (!frame) return null;
+  const fc = frame.getContext('2d', { willReadFrequently: true })!;
+  fc.drawImage(video, 0, 0, videoW, videoH);
+
+  onPhase?.(
+    locale === 'zh' ? 'LaMa 高清补全（首次运行下载约 198 MB）…' : 'LaMa HD inpainting (downloads ~198 MB on first run)…'
+  );
+  const resultUrl = await lamaInpaintRegion(
+    frame,
+    rectPx,
+    repo,
+    feather,
+    (ratio) =>
+      onPhase?.(
+        locale === 'zh' ? `LaMa 权重下载 ${Math.round(ratio * 100)}%` : `LaMa weights download ${Math.round(ratio * 100)}%`
+      )
+  );
+  const img = new Image();
+  await new Promise<void>((resolve, reject) => {
+    img.onload = () => resolve();
+    img.onerror = () => reject(new Error('inpaint result decode failed'));
+    img.src = resultUrl;
+  });
+  const patch = createCanvas(rectPx.w, rectPx.h);
+  if (!patch) return null;
+  patch.getContext('2d')!.drawImage(img, rectPx.x, rectPx.y, rectPx.w, rectPx.h, 0, 0, rectPx.w, rectPx.h);
+  applyFeatheredAlpha(patch, feather);
+  return patch;
+}
+
 async function renderAndEncode(
   video: HTMLVideoElement,
   patchCanvas: HTMLCanvasElement,
@@ -442,7 +491,8 @@ async function renderAndEncode(
 /** Video watermark removal entry point. Returns a discriminated result, never throws. */
 export async function removeVideoWatermark(options: VideoWatermarkOptions): Promise<VideoWatermarkResult> {
   const startedAt = performance.now();
-  const { src, rect, method, useMigan, miganRepo, locale, onPhase } = options;
+  const { src, rect, method, useMigan, miganRepo, lamaRepo, locale, onPhase } = options;
+  const useLama = Boolean(lamaRepo);
 
   if (!rect || rect.w <= 0 || rect.h <= 0) {
     return { ok: false, code: 'selection_required' };
@@ -484,7 +534,7 @@ export async function removeVideoWatermark(options: VideoWatermarkOptions): Prom
     const { median, motion } = computeTemporalMedian(samples);
     if (!median.length) return { ok: false, code: 'general' };
 
-    const applied = decideRepairMethod(method, motion, useMigan);
+    const applied = decideRepairMethod(method, motion, useMigan, useLama);
 
     let patchCanvas: HTMLCanvasElement | null;
     if (applied === 'temporal') {
@@ -502,17 +552,10 @@ export async function removeVideoWatermark(options: VideoWatermarkOptions): Prom
       }
     } else {
       const representativeTime = timestamps[Math.floor(timestamps.length / 2)];
-      patchCanvas = await buildMiganPatch(
-        video,
-        representativeTime,
-        width,
-        height,
-        rectPx,
-        8,
-        miganRepo!,
-        onPhase,
-        locale
-      );
+      patchCanvas =
+        applied === 'hq'
+          ? await buildLamaPatch(video, representativeTime, width, height, rectPx, 8, lamaRepo!, onPhase, locale)
+          : await buildMiganPatch(video, representativeTime, width, height, rectPx, 8, miganRepo!, onPhase, locale);
     }
     if (!patchCanvas) return { ok: false, code: 'canvas_context' };
 
@@ -521,7 +564,7 @@ export async function removeVideoWatermark(options: VideoWatermarkOptions): Prom
 
     let finalBlob = videoBlob;
     let hasAudio = false;
-    if (useMigan) {
+    if (useMigan || useLama) {
       try {
         onPhase?.(locale === 'zh' ? 'ffmpeg.wasm 回填音轨…' : 'Muxing the original audio with ffmpeg.wasm…');
         finalBlob = await muxOriginalAudio(videoBlob, src);
@@ -544,7 +587,8 @@ export async function removeVideoWatermark(options: VideoWatermarkOptions): Prom
       hasAudio,
       outputSize: finalBlob.size,
       durationMs: Math.round(performance.now() - startedAt),
-      fallback: method === 'ai' && applied === 'temporal' ? true : undefined,
+      fallback:
+        (method === 'ai' && applied === 'temporal') || (method === 'hq' && applied !== 'hq') ? true : undefined,
     };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);

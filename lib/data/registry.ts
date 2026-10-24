@@ -1318,8 +1318,8 @@ export const DEMOS: Record<string, Record<string, DemoSpec>> = {
       subcategory: 'video-watermark-removal',
       tagline: t('框选水印，逐帧重建', 'Box the watermark, rebuild every frame'),
       task: t(
-        '对水印选区做时域采样：背景在动就用时域中值直接重建干净背景；背景静止就用 MI-GAN 对代表帧做 AI 补全，再把补丁贴回每一帧，经 WebCodecs 重编码为 MP4，真实权重模式下还会用 ffmpeg.wasm 把原音轨接回来。',
-        'The watermark selection is sampled over time: a moving background is rebuilt directly by a temporal median, a static one is filled by MI-GAN on a representative frame. The patch is composited onto every frame, re-encoded with WebCodecs, and the original audio is muxed back with ffmpeg.wasm in real-weights mode.'
+        '对水印选区做时域采样：背景在动就用时域中值直接重建干净背景；背景静止就用 MI-GAN 对代表帧做 AI 补全，显式选装的高清档改用 LaMa（约 198 MB，仅 WASM，慢但大水印重建更强），再把补丁贴回每一帧，经 WebCodecs 重编码为 MP4，真实权重模式下还会用 ffmpeg.wasm 把原音轨接回来。',
+        'The watermark selection is sampled over time: a moving background is rebuilt directly by a temporal median, a static one is filled by MI-GAN on a representative frame — or by LaMa (~198 MB, WASM-only, stronger on large watermarks) in the explicit HD pass. The patch is composited onto every frame, re-encoded with WebCodecs, and the original audio is muxed back with ffmpeg.wasm in real-weights mode.'
       ),
       inputMode: 'video',
       outputKind: 'video-inpainting',
@@ -1329,6 +1329,7 @@ export const DEMOS: Record<string, Record<string, DemoSpec>> = {
             { value: 'auto', label: t('自动判定', 'Auto') },
             { value: 'temporal', label: t('时域中值', 'Temporal median') },
             { value: 'ai', label: t('AI 单帧补全', 'AI single-frame fill') },
+            { value: 'hq', label: t('LaMa 高清补全（慢）', 'LaMa HD fill (slow)') },
           ],
         }),
       ],

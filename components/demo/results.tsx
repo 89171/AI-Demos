@@ -1251,7 +1251,9 @@ function VideoInpaintingView({ p }: { p: Extract<DemoPayload, { kind: 'video-inp
       ? locale === 'zh'
         ? '时域中值重建'
         : 'Temporal median rebuild'
-      : 'MI-GAN';
+      : p.method === 'hq'
+        ? 'LaMa'
+        : 'MI-GAN';
   return (
     <div className="space-y-3">
       <div>
@@ -1272,9 +1274,13 @@ function VideoInpaintingView({ p }: { p: Extract<DemoPayload, { kind: 'video-inp
       </div>
       {p.fallback && (
         <p className="text-[11px] leading-5" style={{ color: 'var(--fg-faint)' }}>
-          {locale === 'zh'
-            ? '选区背景随时间变化，时域中值即可重建，未动用 AI 补全。'
-            : 'The selection background moves over time, so the temporal median rebuilt it without invoking AI fill.'}
+          {p.method === 'temporal'
+            ? locale === 'zh'
+              ? '选区背景随时间变化，时域中值即可重建，未动用 AI 补全。'
+              : 'The selection background moves over time, so the temporal median rebuilt it without invoking AI fill.'
+            : locale === 'zh'
+              ? 'LaMa 高清权重（约 198 MB）未加载，本次改用 MI-GAN 完成补全。'
+              : 'The LaMa HD weights (~198 MB) were not loaded; the patch was filled with MI-GAN instead.'}
         </p>
       )}
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">

@@ -1455,6 +1455,17 @@
         "description": "Samples a representative frame, inpaints the watermark patch with MI-GAN — or LaMa in HD mode, or a temporal median when the background moves — then re-encodes the repaired frames with WebCodecs and muxes the original audio back with ffmpeg.wasm.",
         "demoUrl": "https://toolgarden.xyz/video/remove-watermark",
         "docsUrl": "https://github.com/Picsart-AI-Research/MI-GAN"
+      },
+      {
+        "id": "video-watermark-repair-hq",
+        "name": "Video watermark removal HD (LaMa)",
+        "framework": "onnxruntime-web",
+        "size": "—",
+        "license": "—",
+        "languages": [],
+        "description": "The HD pass of the video watermark pipeline: the representative frame is inpainted with big-lama fp32 (~198 MB) instead of MI-GAN, trading ~7x slower inference for markedly better reconstruction of large watermarks and structures crossing the selection edge. Runs on the WASM execution provider only — LaMa deadlocks on WebGPU — and auto mode never selects it; users opt in explicitly.",
+        "demoUrl": "https://toolgarden.xyz/video/remove-watermark?mode=hq",
+        "docsUrl": "https://github.com/advimman/lama"
       }
     ]
   }
